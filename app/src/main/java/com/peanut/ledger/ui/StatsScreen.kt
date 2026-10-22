@@ -1,5 +1,6 @@
 package com.peanut.ledger.ui
 
+import android.app.DatePickerDialog
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -37,19 +38,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.peanut.ledger.data.AgingBucket
 import com.peanut.ledger.data.ChartData
 import com.peanut.ledger.data.CreditStats
 import com.peanut.ledger.data.PartyStat
 import com.peanut.ledger.data.StatsIndex
 import com.peanut.ledger.data.StatsPeriod
+import com.peanut.ledger.data.StatsRange
 import com.peanut.ledger.data.StatsSummary
 import com.peanut.ledger.data.fmtMoney
 import com.peanut.ledger.data.fmtNum
@@ -57,33 +58,42 @@ import com.peanut.ledger.data.fmtSigned
 import com.peanut.ledger.data.formatCompactAxis
 import com.peanut.ledger.ui.theme.AvatarSell
 import com.peanut.ledger.ui.theme.Bg
-import com.peanut.ledger.ui.theme.Brown
 import com.peanut.ledger.ui.theme.CardBorder
 import com.peanut.ledger.ui.theme.CardWhite
 import com.peanut.ledger.ui.theme.GoldBg
 import com.peanut.ledger.ui.theme.Green
 import com.peanut.ledger.ui.theme.Line
-import com.peanut.ledger.ui.theme.LineStrong
 import com.peanut.ledger.ui.theme.Muted
 import com.peanut.ledger.ui.theme.MutedLight
 import com.peanut.ledger.ui.theme.Placeholder
 import com.peanut.ledger.ui.theme.Primary
-import com.peanut.ledger.ui.theme.PrimaryDark
 import com.peanut.ledger.ui.theme.Red
 import com.peanut.ledger.ui.theme.SurfaceSoft
-import com.peanut.ledger.ui.theme.TextMain
 import com.peanut.ledger.ui.theme.TextSoft
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.math.roundToInt
 
 @Composable
 fun StatsScreen(state: LedgerState) {
     BackHandler { state.closeStats() }
     val index = remember(state.dataRevision) { StatsIndex(state.data) }
-    var period by remember { mutableStateOf(StatsPeriod.MONTH) }
-    var typeFilter by remember { mutableStateOf<String?>(null) }
-    val charts = remember(index, period, typeFilter) { index.charts(period, typeFilter) }
-    val typeLabel = typeFilter ?: "全部类型"
+    var period by remember { mutableStateOf(StatsPeriod.WEEK) }
+    var customStart by remember { mutableStateOf(LocalDate.now().minusDays(6)) }
+    var customEnd by remember { mutableStateOf(LocalDate.now()) }
+    var weightFilter by remember { mutableStateOf<String?>(null) }
+    var priceFilter by remember { mutableStateOf<String?>(null) }
+    val range = remember(period, customStart, customEnd) {
+        StatsRange.of(period, customStart, customEnd)
+    }
+    val summary = remember(index, range) { index.summary(range) }
+    val credit = remember(index, range) { index.credit(range) }
+    val ranking = remember(index, range) { index.salesRanking(range) }
+    val charts = remember(index, range, weightFilter, priceFilter) {
+        index.charts(range, weightFilter, priceFilter)
+    }
+    val weightLabel = weightFilter ?: "全部类型"
+    val priceLabel = priceFilter ?: "全部类型"
 
     Column(Modifier.fillMaxSize().background(Bg)) {
         StatsHeader(state)
@@ -96,46 +106,67 @@ fun StatsScreen(state: LedgerState) {
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            item { PeriodCard(period) { period = it } }
-            item { OverviewCard(index.summary, index.credit) }
-            item { CreditCard(index.credit) }
+            item {
+                PeriodCard(
+                    period = period,
+                    range = range,
+                    customStart = customStart,
+                    customEnd = customEnd,
+                    onPeriod = { period = it },
+                    onCustomStart = {
+                        customStart = it
+                        if (customEnd.isBefore(it)) customEnd = it
+                    },
+                    onCustomEnd = {
+                        customEnd = it
+                        if (customStart.isAfter(it)) customStart = it
+                    }
+                )
+            }
+            item { OverviewCard(summary, credit, range) }
+            item { CreditCard(credit, range) }
             item {
                 StatsChartCard(
                     title = "收支趋势",
                     subtitle = "金额（元）· 采购支出 / 销售收入 / 净收支",
-                    period = period,
                     data = charts.income,
                     allowNegative = true,
-                    startAtZero = true
+                    startAtZero = true,
+                    tooltipFormatter = { value ->
+                        if (value < 0) fmtSigned(value) else fmtMoney(value)
+                    }
                 )
-            }
-            item {
-                TypeFilterCard(index.typeNames, typeFilter) { typeFilter = it }
             }
             item {
                 StatsChartCard(
                     title = "采购 / 销售斤数",
-                    subtitle = "单位：斤 · $typeLabel",
-                    period = period,
+                    subtitle = "单位：斤 · $weightLabel",
                     data = charts.weight,
                     allowNegative = false,
-                    startAtZero = true
+                    startAtZero = true,
+                    typeOptions = index.typeNames,
+                    selectedType = weightFilter,
+                    onTypeSelect = { weightFilter = it },
+                    tooltipFormatter = { "${fmtNum(it)} 斤" }
                 )
             }
             item {
                 StatsChartCard(
                     title = "采购 / 销售均价",
-                    subtitle = "单位：元/斤 · $typeLabel · 成交金额 ÷ 重量",
-                    period = period,
+                    subtitle = "单位：元/斤 · $priceLabel · 成交金额 ÷ 重量",
                     data = charts.price,
                     allowNegative = false,
-                    startAtZero = false
+                    startAtZero = false,
+                    typeOptions = index.typeNames,
+                    selectedType = priceFilter,
+                    onTypeSelect = { priceFilter = it },
+                    tooltipFormatter = { "¥${fmtNum(it)}/斤" }
                 )
             }
-            item { PartyRankCard(index.topBuyers, index.topSellers) }
+            item { PartyRankCard(ranking, range) }
             item {
                 Text(
-                    text = "统计基于本机全部记录；手动金额按实际成交金额计算。",
+                    text = "统计基于本机记录；金额按实际成交金额计算。",
                     color = Placeholder,
                     fontSize = 10.5.sp,
                     textAlign = TextAlign.Center,
@@ -238,59 +269,131 @@ private fun StatsHeader(state: LedgerState) {
 }
 
 @Composable
-private fun PeriodCard(period: StatsPeriod, onSelect: (StatsPeriod) -> Unit) {
+private fun PeriodCard(
+    period: StatsPeriod,
+    range: StatsRange,
+    customStart: LocalDate,
+    customEnd: LocalDate,
+    onPeriod: (StatsPeriod) -> Unit,
+    onCustomStart: (LocalDate) -> Unit,
+    onCustomEnd: (LocalDate) -> Unit
+) {
     LedgerCard(contentPadding = PaddingValues(15.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("统计周期", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(2.dp))
-                Text(period.subtitle, color = Muted, fontSize = 11.5.sp)
+                Text(range.label, color = Muted, fontSize = 11.5.sp)
             }
-            CounterTag("本地数据")
+            Text(
+                text = formatDate(range.start) + " – " + formatDate(range.endInclusive),
+                color = Placeholder,
+                fontSize = 9.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
-        Spacer(Modifier.height(11.dp))
+        Spacer(Modifier.height(10.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             StatsPeriod.entries.forEach { item ->
                 val selected = item == period
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(11.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(if (selected) Primary else SurfaceSoft)
                         .border(
                             1.dp,
                             if (selected) Primary else Line,
-                            RoundedCornerShape(11.dp)
+                            RoundedCornerShape(10.dp)
                         )
-                        .clickable { onSelect(item) }
-                        .padding(vertical = 10.dp),
+                        .clickable { onPeriod(item) }
+                        .padding(vertical = 9.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = item.label,
                         color = if (selected) CardWhite else TextSoft,
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
                     )
                 }
+            }
+        }
+        if (period == StatsPeriod.CUSTOM) {
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DateField(
+                    label = "开始日期",
+                    date = customStart,
+                    modifier = Modifier.weight(1f),
+                    onPick = onCustomStart
+                )
+                DateField(
+                    label = "结束日期",
+                    date = customEnd,
+                    modifier = Modifier.weight(1f),
+                    onPick = onCustomEnd
+                )
             }
         }
     }
 }
 
 @Composable
-private fun OverviewCard(summary: StatsSummary, credit: CreditStats) {
+private fun DateField(
+    label: String,
+    date: LocalDate,
+    modifier: Modifier = Modifier,
+    onPick: (LocalDate) -> Unit
+) {
+    val context = LocalContext.current
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(SurfaceSoft)
+            .border(1.dp, Line, RoundedCornerShape(10.dp))
+            .clickable {
+                DatePickerDialog(
+                    context,
+                    { _, year, month, day ->
+                        onPick(LocalDate.of(year, month + 1, day))
+                    },
+                    date.year,
+                    date.monthValue - 1,
+                    date.dayOfMonth
+                ).show()
+            }
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        Text(label, color = Muted, fontSize = 9.5.sp)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = formatDate(date),
+            color = TextSoft,
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1
+        )
+    }
+}
+
+private fun formatDate(date: LocalDate): String =
+    date.format(DateTimeFormatter.ofPattern("yyyy/M/d"))
+
+@Composable
+private fun OverviewCard(summary: StatsSummary, credit: CreditStats, range: StatsRange) {
     LedgerCard(contentPadding = PaddingValues(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("累计概览", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.width(8.dp))
-            CounterTag("全部")
-        }
+        Text("概览", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(3.dp))
-        Text("全部历史记录", color = Muted, fontSize = 11.sp)
+        Text("当前统计周期 · ${range.label}", color = Muted, fontSize = 11.sp)
         Spacer(Modifier.height(12.dp))
         MetricRow(
             Metric("采购支出", fmtMoney(summary.buyAmount), Primary),
@@ -317,6 +420,8 @@ private fun OverviewCard(summary: StatsSummary, credit: CreditStats) {
     }
 }
 
+private data class Metric(val label: String, val value: String, val color: Color)
+
 @Composable
 private fun MetricRow(left: Metric, right: Metric) {
     Row(
@@ -327,8 +432,6 @@ private fun MetricRow(left: Metric, right: Metric) {
         MetricCell(right, Modifier.weight(1f))
     }
 }
-
-private data class Metric(val label: String, val value: String, val color: Color)
 
 @Composable
 private fun MetricCell(metric: Metric, modifier: Modifier = Modifier) {
@@ -347,7 +450,7 @@ private fun MetricCell(metric: Metric, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun CreditCard(credit: CreditStats) {
+private fun CreditCard(credit: CreditStats, range: StatsRange) {
     LedgerCard(contentPadding = PaddingValues(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("赊账统计", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
@@ -355,7 +458,7 @@ private fun CreditCard(credit: CreditStats) {
             CounterTag("${credit.count} 笔")
         }
         Spacer(Modifier.height(3.dp))
-        Text("全部未结清销售", color = Muted, fontSize = 11.sp)
+        Text("当前周期未结清销售 · ${range.label}", color = Muted, fontSize = 11.sp)
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.Bottom) {
             Column(Modifier.weight(1f)) {
@@ -371,7 +474,7 @@ private fun CreditCard(credit: CreditStats) {
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text("占累计销售", color = Muted, fontSize = 10.5.sp)
+                Text("占周期销售", color = Muted, fontSize = 10.5.sp)
                 Spacer(Modifier.height(3.dp))
                 Text(
                     text = String.format(Locale.US, "%.1f%%", credit.ratio * 100),
@@ -384,95 +487,53 @@ private fun CreditCard(credit: CreditStats) {
         Spacer(Modifier.height(8.dp))
         Text(
             text = if (credit.count > 0) {
-                "共 ${credit.count} 笔 · 最长账龄 ${credit.oldestDays} 天 · 累计销售 ${fmtMoney(credit.salesTotal)}"
+                "共 ${credit.count} 笔 · 最长账龄 ${credit.oldestDays} 天 · 周期销售 ${fmtMoney(credit.salesTotal)}"
             } else {
-                "当前没有未结清销售"
+                "当前周期没有未结清销售"
             },
             color = Muted,
             fontSize = 10.5.sp,
             lineHeight = 16.sp
         )
-        if (credit.count > 0) {
+        if (credit.topDebtors.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                credit.aging.forEach { bucket ->
-                    AgingRow(bucket, credit.outstanding)
-                }
-            }
-            if (credit.topDebtors.isNotEmpty()) {
-                Spacer(Modifier.height(14.dp))
-                Text("欠款最多", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                Spacer(Modifier.height(5.dp))
-                credit.topDebtors.forEachIndexed { index, debtor ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "${index + 1}",
-                            color = MutedLight,
-                            fontSize = 10.sp,
-                            modifier = Modifier.width(16.dp)
-                        )
+            Text("欠款排行", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(5.dp))
+            credit.topDebtors.forEachIndexed { index, debtor ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${index + 1}",
+                        color = MutedLight,
+                        fontSize = 10.sp,
+                        modifier = Modifier.width(16.dp)
+                    )
+                    Column(Modifier.weight(1f)) {
                         Text(
                             text = debtor.name,
                             color = TextSoft,
                             fontSize = 12.sp,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
+                            overflow = TextOverflow.Ellipsis
                         )
+                        Spacer(Modifier.height(1.dp))
                         Text(
-                            text = fmtMoney(debtor.amount),
-                            color = Red,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.SemiBold
+                            text = "最长账龄 ${debtor.oldestDays} 天 · ${debtor.count} 笔",
+                            color = Muted,
+                            fontSize = 9.5.sp,
+                            maxLines = 1
                         )
                     }
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = fmtMoney(debtor.amount),
+                        color = Red,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AgingRow(bucket: AgingBucket, outstanding: Double) {
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(bucket.label, color = TextSoft, fontSize = 11.sp, modifier = Modifier.width(64.dp))
-            Text(
-                text = "${bucket.count} 笔",
-                color = Muted,
-                fontSize = 10.sp
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = fmtMoney(bucket.amount),
-                color = if (bucket.amount > 0.005) Red else Placeholder,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
-        Spacer(Modifier.height(4.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .clip(CircleShape)
-                .background(Line)
-        ) {
-            val fraction = if (outstanding > 0.005) {
-                (bucket.amount / outstanding).toFloat().coerceIn(0f, 1f)
-            } else {
-                0f
-            }
-            if (fraction > 0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(fraction)
-                        .fillMaxHeight()
-                        .background(Red.copy(alpha = 0.7f))
-                )
             }
         }
     }
@@ -482,10 +543,13 @@ private fun AgingRow(bucket: AgingBucket, outstanding: Double) {
 private fun StatsChartCard(
     title: String,
     subtitle: String,
-    period: StatsPeriod,
     data: ChartData,
     allowNegative: Boolean,
-    startAtZero: Boolean
+    startAtZero: Boolean,
+    tooltipFormatter: (Double) -> String,
+    typeOptions: List<String>? = null,
+    selectedType: String? = null,
+    onTypeSelect: ((String?) -> Unit)? = null
 ) {
     val series = data.series.map { item ->
         LineSeriesUi(
@@ -495,14 +559,23 @@ private fun StatsChartCard(
         )
     }
     LedgerCard(contentPadding = PaddingValues(16.dp)) {
-        Row(verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) {
-                Text(title, color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(2.dp))
-                Text(subtitle, color = Muted, fontSize = 10.5.sp, lineHeight = 15.sp)
+        Text(title, color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(2.dp))
+        Text(subtitle, color = Muted, fontSize = 10.5.sp, lineHeight = 15.sp)
+        if (typeOptions != null && onTypeSelect != null) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("类型筛选", color = Muted, fontSize = 10.5.sp)
+                Spacer(Modifier.weight(1f))
+                CompactTypeDropdown(
+                    options = typeOptions,
+                    selected = selectedType,
+                    onSelect = onTypeSelect
+                )
             }
-            Spacer(Modifier.width(8.dp))
-            CounterTag(period.subtitle)
         }
         Spacer(Modifier.height(10.dp))
         FlowRow(
@@ -528,91 +601,85 @@ private fun StatsChartCard(
             series = series,
             allowNegative = allowNegative,
             startAtZero = startAtZero,
-            axisFormatter = { formatCompactAxis(it) }
+            axisFormatter = { formatCompactAxis(it) },
+            tooltipFormatter = tooltipFormatter
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "长按图表查看详细数值",
+            color = Placeholder,
+            fontSize = 9.sp,
+            textAlign = TextAlign.End,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }
 
-private fun chartColor(name: String): Color = when (name) {
-    "采购支出", "采购斤数", "采购均价" -> Primary
-    "销售收入", "销售斤数", "销售均价" -> AvatarSell
-    "净收支" -> Brown
-    else -> Muted
-}
-
 @Composable
-private fun TypeFilterCard(
-    typeNames: List<String>,
+private fun CompactTypeDropdown(
+    options: List<String>,
     selected: String?,
     onSelect: (String?) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    LedgerCard(contentPadding = PaddingValues(15.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("类型筛选", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(2.dp))
-                Text("仅影响斤数与均价图", color = Muted, fontSize = 11.5.sp)
-            }
-            Spacer(Modifier.width(8.dp))
-            Box {
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(9.dp))
-                        .background(SurfaceSoft)
-                        .border(1.dp, Line, RoundedCornerShape(9.dp))
-                        .clickable { expanded = true }
-                        .padding(horizontal = 9.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = selected ?: "全部类型",
-                        color = TextSoft,
-                        fontSize = 11.5.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    AppIconView(
-                        icon = AppIcon.ChevronDown,
-                        tint = Muted,
-                        modifier = Modifier.size(11.dp)
-                    )
-                }
-                DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false },
-                    modifier = Modifier.width(230.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    containerColor = CardWhite,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 10.dp,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
-                ) {
-                    Column(
-                        Modifier
-                            .heightIn(max = 320.dp)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        TypeFilterItem(
-                            text = "全部类型",
-                            selected = selected == null,
-                            onClick = {
-                                expanded = false
-                                onSelect(null)
-                            }
-                        )
-                        typeNames.forEach { name ->
-                            TypeFilterItem(
-                                text = name,
-                                selected = selected == name,
-                                onClick = {
-                                    expanded = false
-                                    onSelect(name)
-                                }
-                            )
-                        }
+    Box {
+        Row(
+            modifier = Modifier
+                .widthIn(max = 170.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(SurfaceSoft)
+                .border(1.dp, Line, RoundedCornerShape(8.dp))
+                .clickable { expanded = true }
+                .padding(horizontal = 8.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = selected ?: "全部类型",
+                color = TextSoft,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            Spacer(Modifier.width(4.dp))
+            AppIconView(
+                icon = AppIcon.ChevronDown,
+                tint = Muted,
+                modifier = Modifier.size(10.dp)
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.width(220.dp),
+            shape = RoundedCornerShape(14.dp),
+            containerColor = CardWhite,
+            tonalElevation = 0.dp,
+            shadowElevation = 10.dp,
+            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
+        ) {
+            Column(
+                Modifier
+                    .heightIn(max = 300.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                TypeFilterItem(
+                    text = "全部类型",
+                    selected = selected == null,
+                    onClick = {
+                        expanded = false
+                        onSelect(null)
                     }
+                )
+                options.forEach { name ->
+                    TypeFilterItem(
+                        text = name,
+                        selected = selected == name,
+                        onClick = {
+                            expanded = false
+                            onSelect(name)
+                        }
+                    )
                 }
             }
         }
@@ -644,77 +711,54 @@ private fun TypeFilterItem(text: String, selected: Boolean, onClick: () -> Unit)
 }
 
 @Composable
-private fun PartyRankCard(buyers: List<PartyStat>, sellers: List<PartyStat>) {
+private fun PartyRankCard(ranking: List<PartyStat>, range: StatsRange) {
     LedgerCard(contentPadding = PaddingValues(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("往来排行", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.width(8.dp))
-            CounterTag("全部")
-        }
+        Text("往来排行", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(3.dp))
-        Text("按累计金额", color = Muted, fontSize = 11.sp)
+        Text("商品收购方 · ${range.label}", color = Muted, fontSize = 11.sp)
         Spacer(Modifier.height(12.dp))
-        val stacked = LocalDensity.current.fontScale > 1.12f
-        if (stacked) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                PartyColumn("采购农户", buyers, Primary, Modifier.fillMaxWidth())
-                ChevronDivider()
-                PartyColumn("销售收购方", sellers, AvatarSell, Modifier.fillMaxWidth())
-            }
+        if (ranking.isEmpty()) {
+            Text("当前周期暂无商品收购方", color = Placeholder, fontSize = 11.sp)
         } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                PartyColumn("采购农户", buyers, Primary, Modifier.weight(1f))
-                PartyColumn("销售收购方", sellers, AvatarSell, Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun PartyColumn(
-    title: String,
-    list: List<PartyStat>,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier) {
-        Text(title, color = color, fontSize = 10.5.sp, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.height(6.dp))
-        if (list.isEmpty()) {
-            Text("暂无记录", color = Placeholder, fontSize = 10.5.sp)
-        } else {
-            list.forEachIndexed { index, item ->
+            ranking.forEachIndexed { index, item ->
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "${index + 1}",
                         color = MutedLight,
-                        fontSize = 9.5.sp,
-                        modifier = Modifier.width(13.dp)
+                        fontSize = 10.sp,
+                        modifier = Modifier.width(18.dp)
                     )
                     Text(
                         text = item.name,
                         color = TextSoft,
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                    Spacer(Modifier.width(3.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = fmtMoney(item.amount),
-                        color = Muted,
-                        fontSize = 9.5.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        color = AvatarSell,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
         }
     }
+}
+
+private val ChartBuy = Color(0xFF2F73B8)
+private val ChartSell = Color(0xFFE07A2F)
+private val ChartNet = Color(0xFF7B5CD6)
+
+private fun chartColor(name: String): Color = when (name) {
+    "采购支出", "采购斤数", "采购均价" -> ChartBuy
+    "销售收入", "销售斤数", "销售均价" -> ChartSell
+    "净收支" -> ChartNet
+    else -> Muted
 }

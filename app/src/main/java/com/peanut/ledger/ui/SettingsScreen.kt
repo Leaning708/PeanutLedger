@@ -100,7 +100,7 @@ fun SettingsScreen(state: LedgerState) {
                     )
                     Spacer(Modifier.height(7.dp))
                     Text(
-                        text = "数据仅保存在本机 · 花生账本 v0.1.2",
+                        text = "数据仅保存在本机 · 花生账本 v0.1.3",
                         color = Placeholder,
                         fontSize = 11.sp,
                         textAlign = TextAlign.Center
@@ -143,6 +143,12 @@ private fun SettingsHeader(state: LedgerState) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text("设置", color = CardWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "类型 · 显示 · 位置 · 数据",
+                    color = CardWhite.copy(alpha = 0.7f),
+                    fontSize = 11.5.sp
+                )
             }
             Spacer(Modifier.width(40.dp))
         }

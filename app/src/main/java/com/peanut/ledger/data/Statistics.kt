@@ -6,10 +6,73 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 
-enum class StatsPeriod(val label: String, val subtitle: String) {
-    DAY("日", "近30天"),
-    MONTH("月", "近12个月"),
-    YEAR("年", "近5年")
+enum class StatsPeriod(val label: String) {
+    WEEK("近7天"),
+    DAY30("近30天"),
+    YEAR("近1年"),
+    CUSTOM("自定义")
+}
+
+enum class StatsGranularity { DAY, MONTH, YEAR }
+
+data class StatsRange(
+    val start: LocalDate,
+    val endInclusive: LocalDate,
+    val label: String,
+    val granularity: StatsGranularity
+) {
+    fun contains(date: LocalDate): Boolean =
+        !date.isBefore(start) && !date.isAfter(endInclusive)
+
+    companion object {
+        fun of(
+            period: StatsPeriod,
+            customStart: LocalDate,
+            customEnd: LocalDate,
+            today: LocalDate = LocalDate.now()
+        ): StatsRange {
+            val rawStart: LocalDate
+            val rawEnd: LocalDate
+            when (period) {
+                StatsPeriod.WEEK -> {
+                    rawStart = today.minusDays(6)
+                    rawEnd = today
+                }
+                StatsPeriod.DAY30 -> {
+                    rawStart = today.minusDays(29)
+                    rawEnd = today
+                }
+                StatsPeriod.YEAR -> {
+                    rawStart = YearMonth.from(today).minusMonths(11).atDay(1)
+                    rawEnd = today
+                }
+                StatsPeriod.CUSTOM -> {
+                    rawStart = customStart
+                    rawEnd = customEnd
+                }
+            }
+            val start = minOf(rawStart, rawEnd)
+            val end = maxOf(rawStart, rawEnd)
+            val days = ChronoUnit.DAYS.between(start, end)
+            val granularity = when {
+                period == StatsPeriod.YEAR -> StatsGranularity.MONTH
+                days <= 31 -> StatsGranularity.DAY
+                days <= 370 -> StatsGranularity.MONTH
+                else -> StatsGranularity.YEAR
+            }
+            val label = when (period) {
+                StatsPeriod.WEEK -> "近7天"
+                StatsPeriod.DAY30 -> "近30天"
+                StatsPeriod.YEAR -> "近1年"
+                StatsPeriod.CUSTOM -> {
+                    val pattern = if (start.year == end.year) "M/d" else "yy/M/d"
+                    val formatter = DateTimeFormatter.ofPattern(pattern)
+                    "${start.format(formatter)} – ${end.format(formatter)}"
+                }
+            }
+            return StatsRange(start, end, label, granularity)
+        }
+    }
 }
 
 data class StatRecord(
@@ -38,13 +101,8 @@ data class StatEntry(
 data class PartyStat(
     val name: String,
     val amount: Double,
-    val count: Int
-)
-
-data class AgingBucket(
-    val label: String,
-    val amount: Double,
-    val count: Int
+    val count: Int,
+    val oldestDays: Long = 0L
 )
 
 data class CreditStats(
@@ -53,7 +111,6 @@ data class CreditStats(
     val salesTotal: Double,
     val ratio: Double,
     val oldestDays: Long,
-    val aging: List<AgingBucket>,
     val topDebtors: List<PartyStat>
 )
 
@@ -85,20 +142,25 @@ private data class StatBucket(
 /**
  * Flat, immutable index used by the statistics screen.
  *
- * The persisted ledger is still a day map, but statistics repeatedly need to scan every
- * item with filters. Flattening once avoids walking the nested day/type/item tree for every
- * chart and makes future migration to a database-backed query layer straightforward.
+ * The persisted ledger is still a day map, but statistics repeatedly need to scan every item
+ * with filters. Flattening once avoids walking the nested day/type/item tree for every chart.
+ * Aggregations are cached by selected range and filter, so switching charts stays cheap.
  */
 class StatsIndex(val data: LedgerData) {
     val records: List<StatRecord>
     val entries: List<StatEntry>
     val typeNames: List<String>
-    val summary: StatsSummary
-    val credit: CreditStats
-    val topBuyers: List<PartyStat>
-    val topSellers: List<PartyStat>
 
-    private val chartCache = mutableMapOf<Triple<StatsPeriod, String?, LocalDate>, StatsCharts>()
+    private val summaryCache = mutableMapOf<StatsRange, StatsSummary>()
+    private val creditCache = mutableMapOf<StatsRange, CreditStats>()
+    private val rankingCache = mutableMapOf<StatsRange, List<PartyStat>>()
+    private val chartCache = mutableMapOf<ChartKey, StatsCharts>()
+
+    private data class ChartKey(
+        val range: StatsRange,
+        val weightFilter: String?,
+        val priceFilter: String?
+    )
 
     init {
         val recordBuilder = mutableListOf<StatRecord>()
@@ -146,81 +208,56 @@ class StatsIndex(val data: LedgerData) {
         records = recordBuilder
         entries = entryBuilder
         typeNames = records.map { it.typeName }.distinct().sorted()
+    }
 
-        val buyAmount = round2(entries.filter { it.tab == LedgerTab.BUY }.sumOf { it.amount })
-        val sellAmount = round2(entries.filter { it.tab == LedgerTab.SELL }.sumOf { it.amount })
-        summary = StatsSummary(
+    fun summary(range: StatsRange): StatsSummary = summaryCache.getOrPut(range) {
+        val inRange = entries.filter { range.contains(it.date) }
+        val buyAmount = round2(inRange.filter { it.tab == LedgerTab.BUY }.sumOf { it.amount })
+        val sellAmount = round2(inRange.filter { it.tab == LedgerTab.SELL }.sumOf { it.amount })
+        StatsSummary(
             buyAmount = buyAmount,
             sellAmount = sellAmount,
             profit = round2(sellAmount - buyAmount),
-            buyWeight = round2(entries.filter { it.tab == LedgerTab.BUY }.sumOf { it.weight }),
-            sellWeight = round2(entries.filter { it.tab == LedgerTab.SELL }.sumOf { it.weight }),
-            entryCount = entries.size
+            buyWeight = round2(inRange.filter { it.tab == LedgerTab.BUY }.sumOf { it.weight }),
+            sellWeight = round2(inRange.filter { it.tab == LedgerTab.SELL }.sumOf { it.weight }),
+            entryCount = inRange.size
         )
+    }
 
+    fun credit(range: StatsRange): CreditStats = creditCache.getOrPut(range) {
         val today = LocalDate.now()
-        val sales = entries.filter { it.tab == LedgerTab.SELL }
+        val sales = entries.filter { it.tab == LedgerTab.SELL && range.contains(it.date) }
         val outstandingEntries = sales.filter { !it.settled && it.amount > 0.005 }
         val outstanding = round2(outstandingEntries.sumOf { it.amount })
         val salesTotal = round2(sales.sumOf { it.amount })
-        val aging = listOf(
-            AgingBucket("0–7天", 0.0, 0),
-            AgingBucket("8–30天", 0.0, 0),
-            AgingBucket("31–90天", 0.0, 0),
-            AgingBucket("90天以上", 0.0, 0)
-        ).toMutableList()
-        var oldest = 0L
-        for (entry in outstandingEntries) {
-            val days = ChronoUnit.DAYS.between(entry.date, today).coerceAtLeast(0L)
-            if (days > oldest) oldest = days
-            val index = when {
-                days <= 7 -> 0
-                days <= 30 -> 1
-                days <= 90 -> 2
-                else -> 3
+        val debtors = outstandingEntries
+            .groupBy { it.party }
+            .map { (name, list) ->
+                PartyStat(
+                    name = name,
+                    amount = round2(list.sumOf { it.amount }),
+                    count = list.size,
+                    oldestDays = list.maxOf {
+                        ChronoUnit.DAYS.between(it.date, today).coerceAtLeast(0L)
+                    }
+                )
             }
-            aging[index] = aging[index].copy(
-                amount = round2(aging[index].amount + entry.amount),
-                count = aging[index].count + 1
-            )
-        }
-        credit = CreditStats(
+            .filter { it.amount > 0.005 }
+            .sortedByDescending { it.amount }
+            .take(5)
+        CreditStats(
             outstanding = outstanding,
             count = outstandingEntries.size,
             salesTotal = salesTotal,
             ratio = if (salesTotal > 0.005) outstanding / salesTotal else 0.0,
-            oldestDays = oldest,
-            aging = aging,
-            topDebtors = outstandingEntries
-                .groupBy { it.party }
-                .map { (name, list) ->
-                    PartyStat(
-                        name = name,
-                        amount = round2(list.sumOf { it.amount }),
-                        count = list.size
-                    )
-                }
-                .filter { it.amount > 0.005 }
-                .sortedByDescending { it.amount }
-                .take(5)
+            oldestDays = debtors.maxOfOrNull { it.oldestDays } ?: 0L,
+            topDebtors = debtors
         )
-
-        topBuyers = partyRanking(LedgerTab.BUY)
-        topSellers = partyRanking(LedgerTab.SELL)
     }
 
-    fun charts(
-        period: StatsPeriod,
-        typeFilter: String?,
-        today: LocalDate = LocalDate.now()
-    ): StatsCharts {
-        val key = Triple(period, typeFilter, today)
-        return chartCache.getOrPut(key) { buildCharts(period, typeFilter, today) }
-    }
-
-    private fun partyRanking(tab: LedgerTab): List<PartyStat> =
+    fun salesRanking(range: StatsRange): List<PartyStat> = rankingCache.getOrPut(range) {
         entries
-            .filter { it.tab == tab && it.amount > 0.005 }
+            .filter { it.tab == LedgerTab.SELL && range.contains(it.date) && it.amount > 0.005 }
             .groupBy { it.party }
             .map { (name, list) ->
                 PartyStat(
@@ -230,14 +267,23 @@ class StatsIndex(val data: LedgerData) {
                 )
             }
             .sortedByDescending { it.amount }
-            .take(3)
+            .take(5)
+    }
+
+    fun charts(
+        range: StatsRange,
+        weightFilter: String?,
+        priceFilter: String?
+    ): StatsCharts = chartCache.getOrPut(ChartKey(range, weightFilter, priceFilter)) {
+        buildCharts(range, weightFilter, priceFilter)
+    }
 
     private fun buildCharts(
-        period: StatsPeriod,
-        typeFilter: String?,
-        today: LocalDate
+        range: StatsRange,
+        weightFilter: String?,
+        priceFilter: String?
     ): StatsCharts {
-        val buckets = buildBuckets(period, today)
+        val buckets = buildBuckets(range)
         val size = buckets.size
         val buyAmount = DoubleArray(size)
         val sellAmount = DoubleArray(size)
@@ -249,7 +295,8 @@ class StatsIndex(val data: LedgerData) {
         val sellPriceWeight = DoubleArray(size)
 
         for (entry in entries) {
-            val index = bucketIndex(period, buckets, entry.date) ?: continue
+            if (!range.contains(entry.date)) continue
+            val index = bucketIndex(range.granularity, buckets, entry.date, range) ?: continue
             when (entry.tab) {
                 LedgerTab.BUY -> buyAmount[index] += entry.amount
                 LedgerTab.SELL -> sellAmount[index] += entry.amount
@@ -257,18 +304,25 @@ class StatsIndex(val data: LedgerData) {
         }
 
         for (record in records) {
-            if (typeFilter != null && record.typeName != typeFilter) continue
-            val index = bucketIndex(period, buckets, record.date) ?: continue
+            if (!range.contains(record.date)) continue
+            val index = bucketIndex(range.granularity, buckets, record.date, range) ?: continue
+            val matchesWeight = weightFilter == null || record.typeName == weightFilter
+            val matchesPrice = priceFilter == null || record.typeName == priceFilter
+            if (!matchesWeight && !matchesPrice) continue
             when (record.tab) {
                 LedgerTab.BUY -> {
-                    buyWeight[index] += record.weight
-                    buyPriceAmount[index] += record.amount
-                    buyPriceWeight[index] += record.weight
+                    if (matchesWeight) buyWeight[index] += record.weight
+                    if (matchesPrice) {
+                        buyPriceAmount[index] += record.amount
+                        buyPriceWeight[index] += record.weight
+                    }
                 }
                 LedgerTab.SELL -> {
-                    sellWeight[index] += record.weight
-                    sellPriceAmount[index] += record.amount
-                    sellPriceWeight[index] += record.weight
+                    if (matchesWeight) sellWeight[index] += record.weight
+                    if (matchesPrice) {
+                        sellPriceAmount[index] += record.amount
+                        sellPriceWeight[index] += record.weight
+                    }
                 }
             }
         }
@@ -317,46 +371,60 @@ class StatsIndex(val data: LedgerData) {
         return StatsCharts(income, weight, price)
     }
 
-    private fun buildBuckets(period: StatsPeriod, today: LocalDate): List<StatBucket> =
-        when (period) {
-            StatsPeriod.DAY -> {
-                val start = today.minusDays(29)
+    private fun buildBuckets(range: StatsRange): List<StatBucket> =
+        when (range.granularity) {
+            StatsGranularity.DAY -> {
                 val formatter = DateTimeFormatter.ofPattern("M/d")
-                List(30) { offset ->
-                    val date = start.plusDays(offset.toLong())
-                    StatBucket(date, date.plusDays(1), date.format(formatter))
+                val cells = mutableListOf<StatBucket>()
+                var date = range.start
+                while (!date.isAfter(range.endInclusive)) {
+                    cells += StatBucket(date, date.plusDays(1), date.format(formatter))
+                    date = date.plusDays(1)
                 }
+                cells
             }
-            StatsPeriod.MONTH -> {
-                val startMonth = YearMonth.from(today).minusMonths(11)
-                List(12) { offset ->
-                    val month = startMonth.plusMonths(offset.toLong())
+            StatsGranularity.MONTH -> {
+                val startMonth = YearMonth.from(range.start)
+                val endMonth = YearMonth.from(range.endInclusive)
+                val formatter = if (startMonth.year == endMonth.year) {
+                    DateTimeFormatter.ofPattern("M月")
+                } else {
+                    DateTimeFormatter.ofPattern("yy/M")
+                }
+                val cells = mutableListOf<StatBucket>()
+                var month = startMonth
+                while (!month.isAfter(endMonth)) {
                     val start = month.atDay(1)
-                    StatBucket(start, start.plusMonths(1), "${month.monthValue}月")
+                    cells += StatBucket(start, start.plusMonths(1), start.format(formatter))
+                    month = month.plusMonths(1)
                 }
+                cells
             }
-            StatsPeriod.YEAR -> {
-                val startYear = today.year - 4
-                List(5) { offset ->
-                    val year = startYear + offset
+            StatsGranularity.YEAR -> {
+                val cells = mutableListOf<StatBucket>()
+                var year = range.start.year
+                while (year <= range.endInclusive.year) {
                     val start = LocalDate.of(year, 1, 1)
-                    StatBucket(start, start.plusYears(1), year.toString())
+                    cells += StatBucket(start, start.plusYears(1), year.toString())
+                    year++
                 }
+                cells
             }
         }
 
     private fun bucketIndex(
-        period: StatsPeriod,
+        granularity: StatsGranularity,
         buckets: List<StatBucket>,
-        date: LocalDate
+        date: LocalDate,
+        range: StatsRange
     ): Int? {
-        val index = when (period) {
-            StatsPeriod.DAY -> ChronoUnit.DAYS.between(buckets.first().start, date).toInt()
-            StatsPeriod.MONTH -> ChronoUnit.MONTHS.between(
-                YearMonth.from(buckets.first().start),
+        val index = when (granularity) {
+            StatsGranularity.DAY -> ChronoUnit.DAYS.between(range.start, date).toInt()
+            StatsGranularity.MONTH -> ChronoUnit.MONTHS.between(
+                YearMonth.from(range.start),
                 YearMonth.from(date)
             ).toInt()
-            StatsPeriod.YEAR -> date.year - buckets.first().start.year
+            StatsGranularity.YEAR -> date.year - range.start.year
         }
         return index.takeIf { it in buckets.indices }
     }
