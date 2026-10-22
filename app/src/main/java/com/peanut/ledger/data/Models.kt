@@ -31,6 +31,15 @@ data class LedgerType(
     val items: List<LedgerItem> = emptyList()
 )
 
+data class EntryLocation(
+    val latitude: Double,
+    val longitude: Double,
+    val label: String? = null
+) {
+    fun displayText(): String = label?.takeIf { it.isNotBlank() }
+        ?: String.format(Locale.US, "%.4f, %.4f", latitude, longitude)
+}
+
 data class LedgerEntry(
     val id: String = newId(),
     val name: String = "",
@@ -40,6 +49,7 @@ data class LedgerEntry(
     val adjust: Double = 0.0,
     val finalOverride: Double? = null,
     val createdAt: Long = 0L,
+    val location: EntryLocation? = null,
     val types: List<LedgerType> = emptyList()
 ) {
     fun title(tab: LedgerTab): String = if (tab == LedgerTab.BUY) name else buyer
@@ -60,15 +70,15 @@ data class NamedOption(
 )
 
 fun defaultBuyTypes(): List<NamedOption> =
-    listOf("花生米", "花生果", "油料米", "白沙米", "海花米", "种子米")
+    listOf("花生果", "商品米", "种子果", "种子米")
         .map { NamedOption(it) }
 
 fun defaultSellTypes(): List<NamedOption> =
-    listOf("商品米", "商品果", "油料米", "下料米", "花生米")
+    listOf("商品米", "种子果", "种子米", "下料米")
         .map { NamedOption(it) }
 
 fun defaultBuyers(): List<NamedOption> =
-    listOf("鲁南油厂").map { NamedOption(it) }
+    listOf("超市", "油厂").map { NamedOption(it) }
 
 data class LedgerSettings(
     val buyTypes: List<NamedOption> = defaultBuyTypes(),
@@ -76,7 +86,8 @@ data class LedgerSettings(
     val buyers: List<NamedOption> = defaultBuyers(),
     val privacyMode: Boolean = false,
     val fontScale: Float = 1.0f,
-    val theme: String = "warm"
+    val theme: String = "warm",
+    val defaultSettled: Boolean = false
 )
 
 data class LedgerData(

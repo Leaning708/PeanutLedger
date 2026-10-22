@@ -41,7 +41,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,7 +53,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -75,6 +80,8 @@ import com.peanut.ledger.data.itemAmount
 import com.peanut.ledger.data.round2
 import com.peanut.ledger.data.typeSubtotal
 import com.peanut.ledger.data.weekLabel
+import com.peanut.ledger.ui.theme.AvatarBuy
+import com.peanut.ledger.ui.theme.AvatarSell
 import com.peanut.ledger.ui.theme.Bg
 import com.peanut.ledger.ui.theme.Brown
 import com.peanut.ledger.ui.theme.CardBorder
@@ -101,10 +108,19 @@ import kotlin.math.abs
 
 private data class MainPage(val date: LocalDate, val tab: LedgerTab)
 
+private fun pageOrdinal(page: MainPage): Long =
+    page.date.toEpochDay() * 2L + if (page.tab == LedgerTab.SELL) 1L else 0L
+
 @Composable
 fun MainScreen(state: LedgerState) {
     val density = LocalDensity.current
     val swipeThreshold = with(density) { 72.dp.toPx() }
+    var dockHeightPx by remember { mutableIntStateOf(0) }
+    val contentBottomPadding = if (dockHeightPx > 0) {
+        with(density) { dockHeightPx.toDp() }.plus(24.dp).coerceAtLeast(132.dp)
+    } else {
+        132.dp
+    }
     val swipeModifier = Modifier.pointerInput(state.currentDate, state.tab) {
         var totalDrag = 0f
         detectHorizontalDragGestures(
@@ -115,17 +131,9 @@ fun MainScreen(state: LedgerState) {
             },
             onDragEnd = {
                 if (totalDrag <= -swipeThreshold) {
-                    if (state.tab == LedgerTab.BUY) {
-                        state.toggleTab(LedgerTab.SELL)
-                    } else {
-                        state.nextDay()
-                    }
+                    state.swipeForwardPage()
                 } else if (totalDrag >= swipeThreshold) {
-                    if (state.tab == LedgerTab.SELL) {
-                        state.toggleTab(LedgerTab.BUY)
-                    } else {
-                        state.previousDay()
-                    }
+                    state.swipeBackwardPage()
                 }
                 totalDrag = 0f
             },
@@ -140,13 +148,7 @@ fun MainScreen(state: LedgerState) {
                 targetState = page,
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 transitionSpec = {
-                    val forward = when {
-                        initialState.tab == LedgerTab.BUY && targetState.tab == LedgerTab.SELL -> true
-                        initialState.tab == LedgerTab.SELL && targetState.tab == LedgerTab.BUY -> false
-                        targetState.date.isAfter(initialState.date) -> true
-                        targetState.date.isBefore(initialState.date) -> false
-                        else -> targetState.tab == LedgerTab.SELL
-                    }
+                    val forward = pageOrdinal(targetState) > pageOrdinal(initialState)
                     val enter = slideInHorizontally(
                         animationSpec = tween(300, easing = FastOutSlowInEasing)
                     ) { width -> if (forward) width else -width } + fadeIn(tween(170))
@@ -170,7 +172,7 @@ fun MainScreen(state: LedgerState) {
                         start = 16.dp,
                         end = 16.dp,
                         top = 14.dp,
-                        bottom = 132.dp
+                        bottom = contentBottomPadding
                     ),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -208,7 +210,9 @@ fun MainScreen(state: LedgerState) {
         BottomDock(
             state = state,
             stats = state.statsOf(state.currentDate),
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .onGloballyPositioned { dockHeightPx = it.size.height }
         )
     }
 }
@@ -518,6 +522,31 @@ private fun EntryCard(
                 }
             }
 
+            entry.location?.let { location ->
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(SurfaceSoft)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppIconView(
+                        icon = AppIcon.Pin,
+                        tint = Primary,
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = location.displayText(),
+                        color = Muted,
+                        fontSize = 10.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
             if (entry.remark.isNotBlank()) {
                 Spacer(Modifier.height(12.dp))
                 Row(
@@ -545,7 +574,7 @@ private fun EntryCard(
             }
 
             Spacer(Modifier.height(14.dp))
-            val accent = if (isBuy) Primary else Green
+            val accent = if (isBuy) Primary else AvatarSell
             if (entry.types.isEmpty()) {
                 Row(
                     modifier = Modifier
@@ -635,7 +664,7 @@ private fun EntryCard(
                         fontSize = 21.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    if (abs(adjust) >= 0.005) {
+                    if (abs(adjust) >= 0.005 && !masked) {
                         Spacer(Modifier.height(4.dp))
                         val adjustLabel = when {
                             adjust > 0 && isBuy -> "多付"
@@ -677,17 +706,13 @@ private fun EntryCard(
 
 @Composable
 private fun EntryAvatar(label: String, isBuy: Boolean) {
+    val base = if (isBuy) AvatarBuy else AvatarSell
+    val start = lerp(base, Color.White, 0.28f)
     Box(
         modifier = Modifier
             .size(40.dp)
             .clip(RoundedCornerShape(13.dp))
-            .background(
-                if (isBuy) {
-                    Brush.linearGradient(listOf(Color(0xFFE7B77B), Color(0xFFC9853B)))
-                } else {
-                    Brush.linearGradient(listOf(Color(0xFFA9CDB8), Color(0xFF5F9374)))
-                }
-            ),
+            .background(Brush.linearGradient(listOf(start, base))),
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -756,7 +781,7 @@ private fun TypeSection(
                 maxLines = 1,
                 modifier = Modifier.weight(1f)
             )
-            if (type.items.size > 5) {
+            if (type.items.size > 3) {
                 Spacer(Modifier.width(6.dp))
                 CounterTag("${type.items.size} 称")
             }

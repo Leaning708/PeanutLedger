@@ -81,6 +81,7 @@ fun SettingsScreen(state: LedgerState) {
             item { SettingsBlock(state, SettingKind.SELL_TYPES) }
             item { SettingsBlock(state, SettingKind.BUYERS) }
             item { DisplayBlock(state) }
+            item { SettlementBlock(state) }
             item { DataBlock(state) }
             item {
                 Column(
@@ -94,7 +95,7 @@ fun SettingsScreen(state: LedgerState) {
                     )
                     Spacer(Modifier.height(7.dp))
                     Text(
-                        text = "数据仅保存在本机 · 花生账本 v1.0",
+                        text = "数据仅保存在本机 · 花生账本 v1.4.0",
                         color = Placeholder,
                         fontSize = 11.sp,
                         textAlign = TextAlign.Center
@@ -389,66 +390,83 @@ private fun DisplayBlock(state: LedgerState) {
         Spacer(Modifier.height(16.dp))
         Text("主题配色", color = Muted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            AppTheme.entries.forEach { theme ->
-                val selected = state.themeId == theme.id
-                val palette = themePalette(theme)
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(13.dp))
-                        .border(
-                            if (selected) 2.dp else 1.dp,
-                            if (selected) Primary else Line,
-                            RoundedCornerShape(13.dp)
-                        )
-                        .clickable { state.setTheme(theme.id) }
-                        .padding(5.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            AppTheme.entries.chunked(3).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .clip(RoundedCornerShape(9.dp))
-                            .background(Brush.linearGradient(themeHeaderColors(theme))),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        PeanutMark(
-                            tint = CardWhite.copy(alpha = 0.35f),
-                            detailTint = CardWhite.copy(alpha = 0.12f),
-                            modifier = Modifier.size(22.dp)
+                    row.forEach { theme ->
+                        ThemeTile(
+                            state = state,
+                            theme = theme,
+                            modifier = Modifier.weight(1f)
                         )
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(6.dp)
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(palette.bgOuter)
-                        )
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = theme.label,
-                            color = if (selected) Primary else Muted,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        if (selected) {
-                            Spacer(Modifier.width(3.dp))
-                            AppIconView(
-                                icon = AppIcon.Check,
-                                tint = Primary,
-                                modifier = Modifier.size(11.dp)
-                            )
-                        }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThemeTile(
+    state: LedgerState,
+    theme: AppTheme,
+    modifier: Modifier = Modifier
+) {
+    val selected = state.themeId == theme.id
+    val palette = themePalette(theme)
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(13.dp))
+            .border(
+                if (selected) 2.dp else 1.dp,
+                if (selected) Primary else Line,
+                RoundedCornerShape(13.dp)
+            )
+            .clickable { state.setTheme(theme.id) }
+            .padding(5.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(42.dp)
+                .clip(RoundedCornerShape(9.dp))
+                .background(Brush.linearGradient(themeHeaderColors(theme))),
+            contentAlignment = Alignment.Center
+        ) {
+            PeanutMark(
+                tint = CardWhite.copy(alpha = 0.35f),
+                detailTint = CardWhite.copy(alpha = 0.12f),
+                modifier = Modifier.size(20.dp)
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(5.dp)
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(palette.bgOuter)
+            )
+        }
+        Spacer(Modifier.height(5.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = theme.label,
+                color = if (selected) Primary else Muted,
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
+            )
+            if (selected) {
+                Spacer(Modifier.width(2.dp))
+                AppIconView(
+                    icon = AppIcon.Check,
+                    tint = Primary,
+                    modifier = Modifier.size(10.dp)
+                )
             }
         }
     }
@@ -461,6 +479,56 @@ private val fontScaleOptions = listOf(
     FontScaleOption("大", 1.15f),
     FontScaleOption("特大", 1.3f)
 )
+
+@Composable
+private fun SettlementBlock(state: LedgerState) {
+    LedgerCard(contentPadding = PaddingValues(18.dp)) {
+        Text("记账偏好", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(3.dp))
+        Text("新增销售记录时默认使用的结算状态", color = Muted, fontSize = 11.5.sp)
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SettlementOption(
+                label = "默认赊账",
+                selected = !state.defaultSettled,
+                modifier = Modifier.weight(1f)
+            ) { state.setDefaultSettled(false) }
+            SettlementOption(
+                label = "默认结清",
+                selected = state.defaultSettled,
+                modifier = Modifier.weight(1f)
+            ) { state.setDefaultSettled(true) }
+        }
+    }
+}
+
+@Composable
+private fun SettlementOption(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(11.dp))
+            .background(if (selected) Primary else SurfaceSoft)
+            .border(1.dp, if (selected) Primary else Line, RoundedCornerShape(11.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 11.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = if (selected) CardWhite else TextSoft,
+            fontSize = 13.5.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
 
 @Composable
 private fun DataBlock(state: LedgerState) {

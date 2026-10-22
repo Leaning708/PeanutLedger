@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.peanut.ledger.data.DayData
 import com.peanut.ledger.data.DayStats
+import com.peanut.ledger.data.EntryLocation
 import com.peanut.ledger.data.LedgerData
 import com.peanut.ledger.data.LedgerEntry
 import com.peanut.ledger.data.LedgerItem
@@ -101,6 +102,8 @@ class LedgerState(private val context: Context) {
 
     val themeId: String get() = data.settings.theme
 
+    val defaultSettled: Boolean get() = data.settings.defaultSettled
+
     init {
         setActiveTheme(AppTheme.fromId(data.settings.theme))
         pruneAllEmptyTypes()
@@ -124,6 +127,12 @@ class LedgerState(private val context: Context) {
         persist()
     }
 
+    fun setDefaultSettled(settled: Boolean) {
+        if (data.settings.defaultSettled == settled) return
+        data = data.copy(settings = data.settings.copy(defaultSettled = settled))
+        persist()
+    }
+
     val currentDay: DayData get() = data.day(currentDate)
 
     val currentEntries: List<LedgerEntry>
@@ -141,7 +150,7 @@ class LedgerState(private val context: Context) {
         if (targetTab == LedgerTab.SELL && privacyMode && !isRevealed(entry.id)) {
             val number = displayIndex
                 ?: (currentDay.sells.indexOfFirst { it.id == entry.id } + 1).takeIf { it > 0 }
-            return if (number != null) "收购方$number" else "收购方"
+            return if (number != null) "收$number" else "收购方"
         }
         return entry.title(targetTab)
     }
@@ -160,6 +169,30 @@ class LedgerState(private val context: Context) {
 
     fun nextDay() {
         currentDate = currentDate.plusDays(1)
+        revealedEntryId = null
+        sheet = null
+    }
+
+    /** Swipe left: buy -> sell (same day), sell -> buy (next day). */
+    fun swipeForwardPage() {
+        if (tab == LedgerTab.BUY) {
+            tab = LedgerTab.SELL
+        } else {
+            tab = LedgerTab.BUY
+            currentDate = currentDate.plusDays(1)
+        }
+        revealedEntryId = null
+        sheet = null
+    }
+
+    /** Swipe right: sell -> buy (same day), buy -> sell (previous day). */
+    fun swipeBackwardPage() {
+        if (tab == LedgerTab.SELL) {
+            tab = LedgerTab.BUY
+        } else {
+            tab = LedgerTab.SELL
+            currentDate = currentDate.minusDays(1)
+        }
         revealedEntryId = null
         sheet = null
     }
@@ -336,14 +369,20 @@ class LedgerState(private val context: Context) {
 
     fun nextFarmerName(): String = nextFarmerName(currentDay.buys)
 
-    fun addEntry(name: String, buyer: String, newBuyer: Boolean = false) {
+    fun addEntry(
+        name: String,
+        buyer: String,
+        newBuyer: Boolean = false,
+        location: EntryLocation? = null
+    ) {
         var openTypeFor: String? = null
         if (tab == LedgerTab.BUY) {
             val finalName = name.trim().ifBlank { nextFarmerName(currentDay.buys) }
             val entry = LedgerEntry(
                 id = newId(),
                 name = finalName,
-                createdAt = System.currentTimeMillis()
+                createdAt = System.currentTimeMillis(),
+                location = location
             )
             updateDay { it.copy(buys = it.buys + entry) }
             openTypeFor = entry.id
@@ -358,7 +397,7 @@ class LedgerState(private val context: Context) {
             val entry = LedgerEntry(
                 id = newId(),
                 buyer = finalBuyer,
-                settled = false,
+                settled = data.settings.defaultSettled,
                 createdAt = System.currentTimeMillis()
             )
             updateDay { it.copy(sells = it.sells + entry) }

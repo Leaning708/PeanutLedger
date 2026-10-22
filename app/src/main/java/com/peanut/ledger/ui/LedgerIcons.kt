@@ -33,7 +33,8 @@ enum class AppIcon {
     Trash,
     Tag,
     Cash,
-    DragHandle
+    DragHandle,
+    Pin
 }
 
 @Composable
@@ -234,6 +235,34 @@ fun AppIconView(
                 line(5f, 8f, 19f, 8f)
                 line(5f, 12f, 19f, 12f)
                 line(5f, 16f, 19f, 16f)
+            }
+
+            AppIcon.Pin -> {
+                strokePath {
+                    moveTo(dx + 12f * s, dy + 21f * s)
+                    cubicTo(
+                        dx + 8.3f * s, dy + 16.6f * s,
+                        dx + 5f * s, dy + 13f * s,
+                        dx + 5f * s, dy + 9.4f * s
+                    )
+                    cubicTo(
+                        dx + 5f * s, dy + 5.5f * s,
+                        dx + 8.1f * s, dy + 2.5f * s,
+                        dx + 12f * s, dy + 2.5f * s
+                    )
+                    cubicTo(
+                        dx + 15.9f * s, dy + 2.5f * s,
+                        dx + 19f * s, dy + 5.5f * s,
+                        dx + 19f * s, dy + 9.4f * s
+                    )
+                    cubicTo(
+                        dx + 19f * s, dy + 13f * s,
+                        dx + 15.7f * s, dy + 16.6f * s,
+                        dx + 12f * s, dy + 21f * s
+                    )
+                    close()
+                }
+                drawCircle(tint, 2.3f * s, pt(12f, 9.5f), style = stroke)
             }
 
             AppIcon.Cash -> {

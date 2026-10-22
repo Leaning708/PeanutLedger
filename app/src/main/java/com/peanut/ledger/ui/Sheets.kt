@@ -1,6 +1,9 @@
 package com.peanut.ledger.ui
 
+import android.Manifest
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -40,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +52,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -55,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.peanut.ledger.data.EntryLocation
 import com.peanut.ledger.data.LedgerTab
 import com.peanut.ledger.data.entryFinal
 import com.peanut.ledger.data.entryTotal
@@ -79,7 +85,9 @@ import com.peanut.ledger.ui.theme.RedBg
 import com.peanut.ledger.ui.theme.SurfaceSoft
 import com.peanut.ledger.ui.theme.TextMain
 import com.peanut.ledger.ui.theme.TextSoft
+import com.peanut.ledger.location.LocationHelper
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.util.Locale
 import kotlin.math.abs
@@ -185,7 +193,7 @@ private fun MoreSheet(state: LedgerState) {
                 onClick = { state.togglePrivacy() }
             )
             SheetActionItem(
-                text = "类型与收购方设置",
+                text = "设置",
                 icon = AppIcon.Settings,
                 onClick = { state.openSettings() }
             )
@@ -229,16 +237,79 @@ private fun AddEntrySheet(state: LedgerState) {
     }
 }
 
+private enum class LocationStatus { REQUESTING, LOCATING, FOUND, DENIED, UNAVAILABLE }
+
 @Composable
 private fun AddFarmerSheet(state: LedgerState) {
     var name by remember { mutableStateOf(state.nextFarmerName()) }
     val focusRequester = remember { FocusRequester() }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var locationStatus by remember {
+        mutableStateOf(
+            if (LocationHelper.hasPermission(context)) LocationStatus.LOCATING
+            else LocationStatus.REQUESTING
+        )
+    }
+    var entryLocation by remember { mutableStateOf<EntryLocation?>(null) }
+
+    fun fetchLocation() {
+        locationStatus = LocationStatus.LOCATING
+        scope.launch {
+            val result = LocationHelper.currentLocation(context)
+            entryLocation = result
+            locationStatus = if (result != null) LocationStatus.FOUND else LocationStatus.UNAVAILABLE
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        if (result.values.any { it } || LocationHelper.hasPermission(context)) {
+            fetchLocation()
+        } else {
+            locationStatus = LocationStatus.DENIED
+        }
+    }
+
+    fun retryLocation() {
+        if (LocationHelper.hasPermission(context)) {
+            fetchLocation()
+        } else {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
     LaunchedEffect(Unit) {
         delay(300)
         focusRequester.requestFocus()
+        if (LocationHelper.hasPermission(context)) {
+            fetchLocation()
+        } else {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
     }
+
+    val statusText = when (locationStatus) {
+        LocationStatus.REQUESTING -> "正在请求定位权限…"
+        LocationStatus.LOCATING -> "正在获取当前位置…"
+        LocationStatus.FOUND -> entryLocation?.displayText() ?: "已获取当前位置"
+        LocationStatus.DENIED -> "未授权定位，本次将不记录位置"
+        LocationStatus.UNAVAILABLE -> "暂时无法获取位置，本次将不记录位置"
+    }
+
     Column {
-        SheetTitle("新增农户", "只记录名称，稍后添加花生类型和称重")
+        SheetTitle("新增农户", "记录农户和当前位置，稍后添加花生类型")
         FieldLabel("农户名称")
         LedgerTextField(
             value = name,
@@ -246,12 +317,63 @@ private fun AddFarmerSheet(state: LedgerState) {
             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
             placeholder = "输入农户名称"
         )
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(SurfaceSoft)
+                .border(1.dp, Line, RoundedCornerShape(12.dp))
+                .padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconBadge(
+                icon = AppIcon.Pin,
+                tint = Primary,
+                background = GoldBg,
+                size = 30.dp,
+                iconSize = 15.dp
+            )
+            Spacer(Modifier.width(9.dp))
+            Column(Modifier.weight(1f)) {
+                Text("当前位置", color = Muted, fontSize = 10.5.sp)
+                Spacer(Modifier.height(1.dp))
+                Text(
+                    text = statusText,
+                    color = if (locationStatus == LocationStatus.FOUND) TextSoft else Muted,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (locationStatus == LocationStatus.FOUND) {
+                AppIconView(
+                    icon = AppIcon.Check,
+                    tint = Primary,
+                    modifier = Modifier.size(14.dp)
+                )
+            } else if (locationStatus == LocationStatus.DENIED ||
+                locationStatus == LocationStatus.UNAVAILABLE
+            ) {
+                Text(
+                    text = "重试",
+                    color = Primary,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { retryLocation() }
+                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                )
+            }
+        }
         Spacer(Modifier.height(20.dp))
         SheetActionRow {
             GhostButton("取消", { state.closeSheet() }, Modifier.weight(1f))
             PrimaryButton(
                 text = "保存",
-                onClick = { state.addEntry(name, "") },
+                onClick = { state.addEntry(name, "", location = entryLocation) },
                 modifier = Modifier.weight(1f)
             )
         }
@@ -452,7 +574,7 @@ private fun AddTypeSheet(state: LedgerState, entryId: String) {
                 }
             }
         }
-        FieldLabel("自定义类型")
+        FieldLabel("新增自定义类型")
         LedgerTextField(
             value = customName,
             onValueChange = {
@@ -901,8 +1023,6 @@ private fun FinalAmountSheet(state: LedgerState, entryId: String) {
     val currentValue = amountText.toDoubleOrNull() ?: 0.0
     val diff = round2(currentValue - total)
     val suggestion = nextRoundUp(currentValue)
-    val floorValue = floor(total).toLong()
-    val cents = round2(total - floorValue)
 
     Column {
         SheetTitle("修改$finalLabel", "$totalLabel ${fmtMoney(total)}")
@@ -911,17 +1031,9 @@ private fun FinalAmountSheet(state: LedgerState, entryId: String) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp)
         ) {
-            if (cents > 0.005) {
-                PillChip(
-                    text = "抹零至 $floorValue",
-                    onClick = {
-                        amountText = String.format(Locale.US, "%.2f", floorValue.toDouble())
-                    }
-                )
-            }
             if (suggestion != null) {
                 PillChip(
-                    text = suggestion.label,
+                    text = "取整到 ${fmtNum(suggestion.value)}",
                     onClick = {
                         amountText = String.format(Locale.US, "%.2f", suggestion.value)
                     }

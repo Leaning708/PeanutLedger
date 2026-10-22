@@ -39,6 +39,7 @@ object LedgerRepository {
         .put("privacyMode", privacyMode)
         .put("fontScale", fontScale)
         .put("theme", theme)
+        .put("defaultSettled", defaultSettled)
 
     private fun DayData.toJson(): JSONObject = JSONObject()
         .put("remark", remark)
@@ -54,6 +55,12 @@ object LedgerRepository {
         .put("adjust", adjust)
         .put("finalOverride", finalOverride ?: JSONObject.NULL)
         .put("createdAt", createdAt)
+        .put("location", location?.let {
+            JSONObject()
+                .put("latitude", it.latitude)
+                .put("longitude", it.longitude)
+                .put("label", it.label ?: JSONObject.NULL)
+        } ?: JSONObject.NULL)
         .put("types", types.typesToJsonArray())
 
     private fun LedgerType.toJson(): JSONObject = JSONObject()
@@ -111,7 +118,8 @@ object LedgerRepository {
             buyers = if (obj.has("buyers")) obj.optJSONArray("buyers").namedOptionList() else fallback.buyers,
             privacyMode = obj.optBoolean("privacyMode", false),
             fontScale = obj.optDouble("fontScale", 1.0).toFloat().coerceIn(1.0f, 1.3f),
-            theme = obj.optString("theme", "warm")
+            theme = obj.optString("theme", "warm"),
+            defaultSettled = obj.optBoolean("defaultSettled", false)
         )
     }
 
@@ -134,6 +142,13 @@ object LedgerRepository {
             obj.optDouble("finalOverride")
         },
         createdAt = obj.optLong("createdAt", 0L),
+        location = obj.optJSONObject("location")?.let {
+            EntryLocation(
+                latitude = it.optDouble("latitude", 0.0),
+                longitude = it.optDouble("longitude", 0.0),
+                label = if (it.has("label") && !it.isNull("label")) it.optString("label") else null
+            )
+        },
         types = obj.optJSONArray("types").entryList { parseType(it) }
     )
 
@@ -208,7 +223,7 @@ object LedgerRepository {
                     types = listOf(
                         LedgerType(
                             id = newId(),
-                            name = "花生米",
+                            name = "商品米",
                             items = listOf(
                                 LedgerItem(newId(), 300.0, 4.9),
                                 LedgerItem(newId(), 120.0, 5.1)
@@ -220,7 +235,7 @@ object LedgerRepository {
             sells = listOf(
                 LedgerEntry(
                     id = newId(),
-                    buyer = "鲁南油厂",
+                    buyer = "超市",
                     remark = "现金结算",
                     settled = true,
                     createdAt = timestampFor(today, 14, 20),
@@ -239,7 +254,7 @@ object LedgerRepository {
                 ),
                 LedgerEntry(
                     id = newId(),
-                    buyer = "鲁南油厂",
+                    buyer = "油厂",
                     settled = false,
                     createdAt = timestampFor(today, 16, 5),
                     types = listOf(
@@ -272,7 +287,7 @@ object LedgerRepository {
             sells = listOf(
                 LedgerEntry(
                     id = newId(),
-                    buyer = "鲁南油厂",
+                    buyer = "超市",
                     settled = true,
                     createdAt = timestampFor(yesterday, 15, 30),
                     types = listOf(
@@ -291,7 +306,7 @@ object LedgerRepository {
             sells = listOf(
                 LedgerEntry(
                     id = newId(),
-                    buyer = "鲁南油厂",
+                    buyer = "油厂",
                     settled = false,
                     createdAt = timestampFor(threeDaysAgo, 11, 0),
                     types = listOf(
@@ -315,7 +330,7 @@ object LedgerRepository {
                     types = listOf(
                         LedgerType(
                             id = newId(),
-                            name = "油料米",
+                            name = "种子果",
                             items = listOf(LedgerItem(newId(), 600.0, 4.1))
                         )
                     )
