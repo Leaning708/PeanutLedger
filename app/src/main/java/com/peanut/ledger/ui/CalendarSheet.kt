@@ -163,13 +163,13 @@ private fun CalendarSummary(state: LedgerState, stats: DayStats, label: String) 
         ) {
             SummaryCell(
                 label = "${label}支出",
-                value = if (state.privacyMode) "****" else fmtMoney(stats.buy),
+                value = if (state.privacyMode) "****" else fmtMoney(stats.purchase),
                 color = if (state.privacyMode) Placeholder else TextMain,
                 modifier = Modifier.weight(1f)
             )
             SummaryCell(
                 label = "${label}收入",
-                value = if (state.privacyMode) "****" else fmtMoney(stats.sell),
+                value = if (state.privacyMode) "****" else fmtMoney(stats.sale),
                 color = if (state.privacyMode) Placeholder else TextMain,
                 modifier = Modifier.weight(1f)
             )

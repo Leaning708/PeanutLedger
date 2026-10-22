@@ -10,8 +10,8 @@ import kotlin.math.ceil
 import kotlin.math.round
 
 enum class LedgerTab(val label: String) {
-    BUY("采购"),
-    SELL("销售");
+    PURCHASE("采购"),
+    SALE("销售");
 
     companion object {
         fun of(ordinal: Int): LedgerTab = entries.first { it.ordinal == ordinal }
@@ -42,8 +42,8 @@ data class EntryLocation(
 
 data class LedgerEntry(
     val id: String = newId(),
-    val name: String = "",
-    val buyer: String = "",
+    val supplierName: String = "",
+    val buyerName: String = "",
     val remark: String = "",
     val settled: Boolean = false,
     val adjust: Double = 0.0,
@@ -52,16 +52,19 @@ data class LedgerEntry(
     val location: EntryLocation? = null,
     val types: List<LedgerType> = emptyList()
 ) {
-    fun title(tab: LedgerTab): String = if (tab == LedgerTab.BUY) name else buyer
+    fun partyName(tab: LedgerTab): String =
+        if (tab == LedgerTab.PURCHASE) supplierName else buyerName
 }
 
 data class DayData(
-    val buys: List<LedgerEntry> = emptyList(),
-    val sells: List<LedgerEntry> = emptyList(),
+    val purchases: List<LedgerEntry> = emptyList(),
+    val sales: List<LedgerEntry> = emptyList(),
     val remark: String = ""
 ) {
-    fun entries(tab: LedgerTab): List<LedgerEntry> = if (tab == LedgerTab.BUY) buys else sells
-    fun isEmpty(): Boolean = buys.isEmpty() && sells.isEmpty() && remark.isBlank()
+    fun entries(tab: LedgerTab): List<LedgerEntry> =
+        if (tab == LedgerTab.PURCHASE) purchases else sales
+
+    fun isEmpty(): Boolean = purchases.isEmpty() && sales.isEmpty() && remark.isBlank()
 }
 
 data class NamedOption(
@@ -81,8 +84,8 @@ fun defaultBuyers(): List<NamedOption> =
     listOf("超市", "油厂").map { NamedOption(it) }
 
 data class LedgerSettings(
-    val buyTypes: List<NamedOption> = defaultBuyTypes(),
-    val sellTypes: List<NamedOption> = defaultSellTypes(),
+    val purchaseTypes: List<NamedOption> = defaultBuyTypes(),
+    val saleTypes: List<NamedOption> = defaultSellTypes(),
     val buyers: List<NamedOption> = defaultBuyers(),
     val privacyMode: Boolean = false,
     val fontScale: Float = 1.0f,
@@ -98,8 +101,8 @@ data class LedgerData(
     fun day(date: LocalDate): DayData = days[date.toString()] ?: DayData()
 }
 
-data class DayStats(val buy: Double, val sell: Double) {
-    val profit: Double get() = round2(sell - buy)
+data class DayStats(val purchase: Double, val sale: Double) {
+    val profit: Double get() = round2(sale - purchase)
 }
 
 data class RoundSuggestion(val value: Double, val label: String)
@@ -144,7 +147,7 @@ fun nextSupplierName(entries: List<LedgerEntry>): String =
 
 fun nextSupplierNumber(entries: List<LedgerEntry>): Int {
     val used = entries.mapNotNull { entry ->
-        entry.name.trim().removePrefix("供货商").removePrefix("户").toIntOrNull()
+        entry.supplierName.trim().removePrefix("供货商").removePrefix("户").toIntOrNull()
     }.toSet()
     var index = 1
     while (used.contains(index)) index++

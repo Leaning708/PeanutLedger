@@ -77,7 +77,7 @@ sealed interface RestoreCheck {
 class BackupManager(private val context: Context) {
     companion object {
         const val CURRENT_FORMAT_VERSION = 1
-        const val CURRENT_SCHEMA_VERSION = 1
+        const val CURRENT_SCHEMA_VERSION = LedgerRepository.CURRENT_SCHEMA_VERSION
         const val DEFAULT_FREQUENCY_DAYS = 1
         const val DEFAULT_RETENTION_DAYS = 30
         const val FREQUENCY_OFF = 0

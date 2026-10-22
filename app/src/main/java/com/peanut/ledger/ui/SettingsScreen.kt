@@ -81,8 +81,8 @@ fun SettingsScreen(state: LedgerState) {
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            item { SettingsBlock(state, SettingKind.BUY_TYPES) }
-            item { SettingsBlock(state, SettingKind.SELL_TYPES) }
+            item { SettingsBlock(state, SettingKind.PURCHASE_TYPES) }
+            item { SettingsBlock(state, SettingKind.SALE_TYPES) }
             item { SettingsBlock(state, SettingKind.BUYERS) }
             item { DisplayBlock(state) }
             item { SettlementBlock(state) }
@@ -101,7 +101,7 @@ fun SettingsScreen(state: LedgerState) {
                     )
                     Spacer(Modifier.height(7.dp))
                     Text(
-                        text = "数据仅保存在本机 · 花生账本 v0.1.9",
+                        text = "数据仅保存在本机 · 花生账本 v0.1.10",
                         color = Placeholder,
                         fontSize = 11.sp,
                         textAlign = TextAlign.Center
@@ -165,8 +165,8 @@ private fun SettingsBlock(state: LedgerState, kind: SettingKind) {
     val density = LocalDensity.current
     val rowStepPx = with(density) { 55.dp.toPx() }
     val description = when (kind) {
-        SettingKind.BUY_TYPES -> "长按右侧拖动柄排序；点「···」可重命名、失效或删除"
-        SettingKind.SELL_TYPES -> "长按右侧拖动柄排序；点「···」可重命名、失效或删除"
+        SettingKind.PURCHASE_TYPES -> "长按右侧拖动柄排序；点「···」可重命名、失效或删除"
+        SettingKind.SALE_TYPES -> "长按右侧拖动柄排序；点「···」可重命名、失效或删除"
         SettingKind.BUYERS -> "长按右侧拖动柄排序；点「···」可重命名、失效或删除"
     }
     LedgerCard(contentPadding = PaddingValues(18.dp)) {

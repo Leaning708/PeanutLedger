@@ -115,11 +115,11 @@ data class CreditStats(
 )
 
 data class StatsSummary(
-    val buyAmount: Double,
-    val sellAmount: Double,
+    val purchaseAmount: Double,
+    val saleAmount: Double,
     val profit: Double,
-    val buyWeight: Double,
-    val sellWeight: Double,
+    val purchaseWeight: Double,
+    val saleWeight: Double,
     val entryCount: Int
 )
 
@@ -170,7 +170,7 @@ class StatsIndex(val data: LedgerData) {
             val date = runCatching { LocalDate.parse(dateKey) }.getOrNull() ?: continue
             for (tab in LedgerTab.entries) {
                 for (entry in day.entries(tab)) {
-                    val party = (if (tab == LedgerTab.BUY) entry.name else entry.buyer)
+                    val party = (if (tab == LedgerTab.PURCHASE) entry.supplierName else entry.buyerName)
                         .trim()
                         .ifBlank { "未命名" }
                     var entryWeight = 0.0
@@ -212,21 +212,21 @@ class StatsIndex(val data: LedgerData) {
 
     fun summary(range: StatsRange): StatsSummary = summaryCache.getOrPut(range) {
         val inRange = entries.filter { range.contains(it.date) }
-        val buyAmount = round2(inRange.filter { it.tab == LedgerTab.BUY }.sumOf { it.amount })
-        val sellAmount = round2(inRange.filter { it.tab == LedgerTab.SELL }.sumOf { it.amount })
+        val purchaseAmount = round2(inRange.filter { it.tab == LedgerTab.PURCHASE }.sumOf { it.amount })
+        val saleAmount = round2(inRange.filter { it.tab == LedgerTab.SALE }.sumOf { it.amount })
         StatsSummary(
-            buyAmount = buyAmount,
-            sellAmount = sellAmount,
-            profit = round2(sellAmount - buyAmount),
-            buyWeight = round2(inRange.filter { it.tab == LedgerTab.BUY }.sumOf { it.weight }),
-            sellWeight = round2(inRange.filter { it.tab == LedgerTab.SELL }.sumOf { it.weight }),
+            purchaseAmount = purchaseAmount,
+            saleAmount = saleAmount,
+            profit = round2(saleAmount - purchaseAmount),
+            purchaseWeight = round2(inRange.filter { it.tab == LedgerTab.PURCHASE }.sumOf { it.weight }),
+            saleWeight = round2(inRange.filter { it.tab == LedgerTab.SALE }.sumOf { it.weight }),
             entryCount = inRange.size
         )
     }
 
     fun credit(range: StatsRange): CreditStats = creditCache.getOrPut(range) {
         val today = LocalDate.now()
-        val sales = entries.filter { it.tab == LedgerTab.SELL && range.contains(it.date) }
+        val sales = entries.filter { it.tab == LedgerTab.SALE && range.contains(it.date) }
         val outstandingEntries = sales.filter { !it.settled && it.amount > 0.005 }
         val outstanding = round2(outstandingEntries.sumOf { it.amount })
         val salesTotal = round2(sales.sumOf { it.amount })
@@ -257,7 +257,7 @@ class StatsIndex(val data: LedgerData) {
 
     fun salesRanking(range: StatsRange): List<PartyStat> = rankingCache.getOrPut(range) {
         entries
-            .filter { it.tab == LedgerTab.SELL && range.contains(it.date) && it.amount > 0.005 }
+            .filter { it.tab == LedgerTab.SALE && range.contains(it.date) && it.amount > 0.005 }
             .groupBy { it.party }
             .map { (name, list) ->
                 PartyStat(
@@ -285,10 +285,10 @@ class StatsIndex(val data: LedgerData) {
     ): StatsCharts {
         val buckets = buildBuckets(range)
         val size = buckets.size
-        val buyAmount = DoubleArray(size)
-        val sellAmount = DoubleArray(size)
-        val buyWeight = DoubleArray(size)
-        val sellWeight = DoubleArray(size)
+        val purchaseAmount = DoubleArray(size)
+        val saleAmount = DoubleArray(size)
+        val purchaseWeight = DoubleArray(size)
+        val saleWeight = DoubleArray(size)
         val buyPriceAmount = DoubleArray(size)
         val sellPriceAmount = DoubleArray(size)
         val buyPriceWeight = DoubleArray(size)
@@ -298,8 +298,8 @@ class StatsIndex(val data: LedgerData) {
             if (!range.contains(entry.date)) continue
             val index = bucketIndex(range.granularity, buckets, entry.date, range) ?: continue
             when (entry.tab) {
-                LedgerTab.BUY -> buyAmount[index] += entry.amount
-                LedgerTab.SELL -> sellAmount[index] += entry.amount
+                LedgerTab.PURCHASE -> purchaseAmount[index] += entry.amount
+                LedgerTab.SALE -> saleAmount[index] += entry.amount
             }
         }
 
@@ -310,15 +310,15 @@ class StatsIndex(val data: LedgerData) {
             val matchesPrice = priceFilter == null || record.typeName == priceFilter
             if (!matchesWeight && !matchesPrice) continue
             when (record.tab) {
-                LedgerTab.BUY -> {
-                    if (matchesWeight) buyWeight[index] += record.weight
+                LedgerTab.PURCHASE -> {
+                    if (matchesWeight) purchaseWeight[index] += record.weight
                     if (matchesPrice) {
                         buyPriceAmount[index] += record.amount
                         buyPriceWeight[index] += record.weight
                     }
                 }
-                LedgerTab.SELL -> {
-                    if (matchesWeight) sellWeight[index] += record.weight
+                LedgerTab.SALE -> {
+                    if (matchesWeight) saleWeight[index] += record.weight
                     if (matchesPrice) {
                         sellPriceAmount[index] += record.amount
                         sellPriceWeight[index] += record.weight
@@ -331,16 +331,16 @@ class StatsIndex(val data: LedgerData) {
         val income = ChartData(
             labels = labels,
             series = listOf(
-                ChartSeries("采购支出", buyAmount.map { round2(it) }),
-                ChartSeries("销售收入", sellAmount.map { round2(it) }),
-                ChartSeries("净收支", List(size) { round2(sellAmount[it] - buyAmount[it]) })
+                ChartSeries("采购支出", purchaseAmount.map { round2(it) }),
+                ChartSeries("销售收入", saleAmount.map { round2(it) }),
+                ChartSeries("净收支", List(size) { round2(saleAmount[it] - purchaseAmount[it]) })
             )
         )
         val weight = ChartData(
             labels = labels,
             series = listOf(
-                ChartSeries("采购斤数", buyWeight.map { round2(it) }),
-                ChartSeries("销售斤数", sellWeight.map { round2(it) })
+                ChartSeries("采购斤数", purchaseWeight.map { round2(it) }),
+                ChartSeries("销售斤数", saleWeight.map { round2(it) })
             )
         )
         val price = ChartData(

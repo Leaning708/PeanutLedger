@@ -3,32 +3,50 @@ package com.peanut.ledger.data
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
-import java.time.LocalDate
 
 object LedgerRepository {
+    const val CURRENT_SCHEMA_VERSION = 2
     private const val PREFS_NAME = "peanut_ledger"
-    private const val DATA_KEY = "ledger_data_v1"
+    private const val DATA_KEY = "ledger_data_v2"
+    private const val LEGACY_DATA_KEY = "ledger_data_v1"
 
     fun load(context: Context): LedgerData {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val raw = prefs.getString(DATA_KEY, null) ?: return seed().also { save(context, it) }
+        val raw = prefs.getString(DATA_KEY, null)
+            ?: prefs.getString(LEGACY_DATA_KEY, null)
+            ?: return initialData().also { save(context, it) }
         return runCatching { decode(JSONObject(raw)) }
-            .getOrElse { seed().also { save(context, it) } }
+            .getOrElse {
+                quarantine(context, raw)
+                initialData().also { save(context, it) }
+            }
     }
 
     fun save(context: Context, data: LedgerData) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(DATA_KEY, encode(data).toString())
+            .remove(LEGACY_DATA_KEY)
             .apply()
     }
 
     fun encode(data: LedgerData): JSONObject = data.toJson()
 
+    private fun quarantine(context: Context, raw: String) {
+        runCatching {
+            val file = java.io.File(
+                context.filesDir,
+                "corrupt-ledger-${System.currentTimeMillis()}.json"
+            )
+            file.writeText(raw, Charsets.UTF_8)
+        }
+    }
+
     fun decode(root: JSONObject): LedgerData = parseData(root)
 
     private fun LedgerData.toJson(): JSONObject {
         val root = JSONObject()
+        root.put("schemaVersion", CURRENT_SCHEMA_VERSION)
         root.put("settings", settings.toJson())
         val daysObj = JSONObject()
         days.forEach { (key, day) -> daysObj.put(key, day.toJson()) }
@@ -37,8 +55,8 @@ object LedgerRepository {
     }
 
     private fun LedgerSettings.toJson(): JSONObject = JSONObject()
-        .put("buyTypes", buyTypes.optionsToJsonArray())
-        .put("sellTypes", sellTypes.optionsToJsonArray())
+        .put("purchaseTypes", purchaseTypes.optionsToJsonArray())
+        .put("saleTypes", saleTypes.optionsToJsonArray())
         .put("buyers", buyers.optionsToJsonArray())
         .put("privacyMode", privacyMode)
         .put("fontScale", fontScale)
@@ -48,13 +66,13 @@ object LedgerRepository {
 
     private fun DayData.toJson(): JSONObject = JSONObject()
         .put("remark", remark)
-        .put("buys", buys.entriesToJsonArray())
-        .put("sells", sells.entriesToJsonArray())
+        .put("purchases", purchases.entriesToJsonArray())
+        .put("sales", sales.entriesToJsonArray())
 
     private fun LedgerEntry.toJson(): JSONObject = JSONObject()
         .put("id", id)
-        .put("name", name)
-        .put("buyer", buyer)
+        .put("supplier", supplierName)
+        .put("buyerName", buyerName)
         .put("remark", remark)
         .put("settled", settled)
         .put("adjust", adjust)
@@ -102,6 +120,10 @@ object LedgerRepository {
     }
 
     private fun parseData(root: JSONObject): LedgerData {
+        val schema = root.optInt("schemaVersion", 1)
+        require(schema <= CURRENT_SCHEMA_VERSION) {
+            "Unsupported local data schema $schema (max $CURRENT_SCHEMA_VERSION)"
+        }
         val days = mutableMapOf<String, DayData>()
         val daysObj = root.optJSONObject("days")
         if (daysObj != null) {
@@ -118,8 +140,16 @@ object LedgerRepository {
         val fallback = LedgerSettings()
         if (obj == null) return fallback
         return LedgerSettings(
-            buyTypes = if (obj.has("buyTypes")) obj.optJSONArray("buyTypes").namedOptionList() else fallback.buyTypes,
-            sellTypes = if (obj.has("sellTypes")) obj.optJSONArray("sellTypes").namedOptionList() else fallback.sellTypes,
+            purchaseTypes = when {
+                obj.has("purchaseTypes") -> obj.optJSONArray("purchaseTypes").namedOptionList()
+                obj.has("buyTypes") -> obj.optJSONArray("buyTypes").namedOptionList()
+                else -> fallback.purchaseTypes
+            },
+            saleTypes = when {
+                obj.has("saleTypes") -> obj.optJSONArray("saleTypes").namedOptionList()
+                obj.has("sellTypes") -> obj.optJSONArray("sellTypes").namedOptionList()
+                else -> fallback.saleTypes
+            },
             buyers = if (obj.has("buyers")) obj.optJSONArray("buyers").namedOptionList() else fallback.buyers,
             privacyMode = obj.optBoolean("privacyMode", false),
             fontScale = obj.optDouble("fontScale", 1.0).toFloat().coerceIn(1.0f, 1.3f),
@@ -130,15 +160,17 @@ object LedgerRepository {
     }
 
     private fun parseDay(obj: JSONObject): DayData = DayData(
-        buys = obj.optJSONArray("buys").entryList { parseEntry(it) },
-        sells = obj.optJSONArray("sells").entryList { parseEntry(it) },
+        purchases = (obj.optJSONArray("purchases") ?: obj.optJSONArray("buys"))
+            .entryList { parseEntry(it) },
+        sales = (obj.optJSONArray("sales") ?: obj.optJSONArray("sells"))
+            .entryList { parseEntry(it) },
         remark = obj.optString("remark", "")
     )
 
     private fun parseEntry(obj: JSONObject): LedgerEntry = LedgerEntry(
         id = obj.optString("id", newId()),
-        name = obj.optString("name", ""),
-        buyer = obj.optString("buyer", ""),
+        supplierName = obj.optString("supplier", obj.optString("name", "")),
+        buyerName = obj.optString("buyerName", obj.optString("buyer", "")),
         remark = obj.optString("remark", ""),
         settled = obj.optBoolean("settled", false),
         adjust = obj.optDouble("adjust", 0.0),
@@ -201,6 +233,6 @@ object LedgerRepository {
         }
     }
 
-    fun seed(@Suppress("UNUSED_PARAMETER") today: LocalDate = LocalDate.now()): LedgerData =
+    fun initialData(): LedgerData =
         LedgerData(days = emptyMap(), settings = LedgerSettings())
 }

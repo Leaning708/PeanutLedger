@@ -241,17 +241,17 @@ private fun MoreSheet(state: LedgerState) {
 
 @Composable
 private fun AddEntrySheet(state: LedgerState) {
-    if (state.tab == LedgerTab.BUY) {
-        AddFarmerSheet(state)
+    if (state.tab == LedgerTab.PURCHASE) {
+        AddPurchaseSheet(state)
     } else {
-        AddBuyerEntrySheet(state)
+        AddSaleSheet(state)
     }
 }
 
 private enum class LocationStatus { DISABLED, REQUESTING, LOCATING, FOUND, DENIED, UNAVAILABLE }
 
 @Composable
-private fun AddFarmerSheet(state: LedgerState) {
+private fun AddPurchaseSheet(state: LedgerState) {
     var name by remember { mutableStateOf(state.nextSupplierName()) }
     val focusRequester = remember { FocusRequester() }
     val context = LocalContext.current
@@ -418,7 +418,7 @@ private fun AddFarmerSheet(state: LedgerState) {
 }
 
 @Composable
-private fun AddBuyerEntrySheet(state: LedgerState) {
+private fun AddSaleSheet(state: LedgerState) {
     var selectedBuyer by remember { mutableStateOf("") }
     var menuExpanded by remember { mutableStateOf(false) }
     val activeBuyers = state.activeBuyers()
@@ -553,7 +553,7 @@ private fun BuyerSelector(
 
 @Composable
 private fun AddTypeSheet(state: LedgerState, entryId: String) {
-    val presets = if (state.tab == LedgerTab.BUY) {
+    val presets = if (state.tab == LedgerTab.PURCHASE) {
         state.activeBuyTypes()
     } else {
         state.activeSellTypes()
@@ -563,7 +563,7 @@ private fun AddTypeSheet(state: LedgerState, entryId: String) {
         mutableStateOf(lastType ?: presets.firstOrNull().orEmpty())
     }
     var customName by remember(entryId, state.tab) { mutableStateOf("") }
-    val typeLabel = if (state.tab == LedgerTab.BUY) "采购类型" else "销售类型"
+    val typeLabel = if (state.tab == LedgerTab.PURCHASE) "采购类型" else "销售类型"
     Column {
         SheetTitle(
             text = "选择$typeLabel",
@@ -767,23 +767,9 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
     Column {
         SheetTitle(
             text = if (isEdit) "编辑称重" else "新增称重",
-            subtitle = "${type.name} · 输入重量、单价，金额可手动调整"
+            subtitle = "${type.name} · 输入单价、重量，金额可手动调整"
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(Modifier.weight(1f)) {
-                FieldLabel("重量（斤）")
-                LedgerTextField(
-                    value = weightText,
-                    onValueChange = {
-                        weightText = it
-                        amountManual = false
-                        amountText = ""
-                    },
-                    modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-                    placeholder = "0",
-                    keyboardType = KeyboardType.Decimal
-                )
-            }
             Column(Modifier.weight(1f)) {
                 FieldLabel("单价（元/斤）")
                 LedgerTextField(
@@ -794,6 +780,20 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
                         amountText = ""
                     },
                     modifier = Modifier.fillMaxWidth(),
+                    placeholder = "0",
+                    keyboardType = KeyboardType.Decimal
+                )
+            }
+            Column(Modifier.weight(1f)) {
+                FieldLabel("重量（斤）")
+                LedgerTextField(
+                    value = weightText,
+                    onValueChange = {
+                        weightText = it
+                        amountManual = false
+                        amountText = ""
+                    },
+                    modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
                     placeholder = "0",
                     keyboardType = KeyboardType.Decimal
                 )
@@ -887,11 +887,11 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
         }
         if (abs(manualDiff) >= 0.005) {
             Spacer(Modifier.height(6.dp))
-            val isBuy = state.tab == LedgerTab.BUY
+            val isPurchase = state.tab == LedgerTab.PURCHASE
             val diffLabel = when {
-                manualDiff > 0 && isBuy -> "多付"
+                manualDiff > 0 && isPurchase -> "多付"
                 manualDiff > 0 -> "多收"
-                isBuy -> "少付"
+                isPurchase -> "少付"
                 else -> "少收"
             }
             Row(
@@ -950,11 +950,11 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
 @Composable
 private fun EntryMenuSheet(state: LedgerState, entryId: String) {
     val entry = state.findEntry(entryId) ?: return
-    val isBuy = state.tab == LedgerTab.BUY
+    val isPurchase = state.tab == LedgerTab.PURCHASE
     Column {
         SheetTitle(state.displayTitle(entry, state.tab), "选择要进行的操作")
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (!isBuy) {
+            if (!isPurchase) {
                 SheetActionItem(
                     text = if (entry.settled) "标记为赊账" else "标记为已结清",
                     icon = AppIcon.Check,
@@ -962,7 +962,7 @@ private fun EntryMenuSheet(state: LedgerState, entryId: String) {
                 )
             }
             SheetActionItem(
-                text = "修改${if (isBuy) "实付" else "实收"}金额",
+                text = "修改${if (isPurchase) "实付" else "实收"}金额",
                 icon = AppIcon.Cash,
                 onClick = {
                     if (state.canEditSensitive(entryId)) {
@@ -975,7 +975,7 @@ private fun EntryMenuSheet(state: LedgerState, entryId: String) {
                 icon = AppIcon.Note,
                 onClick = { state.openSheet(Sheet.EntryRemark(entryId)) }
             )
-            if (isBuy) {
+            if (isPurchase) {
                 SheetActionItem(
                     text = "重命名供货商",
                     icon = AppIcon.Tag,
@@ -997,8 +997,8 @@ private fun EntryMenuSheet(state: LedgerState, entryId: String) {
 @Composable
 private fun RenameEntrySheet(state: LedgerState, entryId: String) {
     val entry = state.findEntry(entryId) ?: return
-    val isBuy = state.tab == LedgerTab.BUY
-    var name by remember(entryId) { mutableStateOf(entry.title(state.tab)) }
+    val isPurchase = state.tab == LedgerTab.PURCHASE
+    var name by remember(entryId) { mutableStateOf(entry.partyName(state.tab)) }
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(entryId) {
         delay(280)
@@ -1115,9 +1115,9 @@ private fun DayRemarkSheet(state: LedgerState) {
 @Composable
 private fun FinalAmountSheet(state: LedgerState, entryId: String) {
     val entry = state.findEntry(entryId) ?: return
-    val isBuy = state.tab == LedgerTab.BUY
-    val finalLabel = if (isBuy) "实付" else "实收"
-    val totalLabel = if (isBuy) "应付合计" else "应收合计"
+    val isPurchase = state.tab == LedgerTab.PURCHASE
+    val finalLabel = if (isPurchase) "实付" else "实收"
+    val totalLabel = if (isPurchase) "应付合计" else "应收合计"
     val total = entryTotal(entry)
     val final = entryFinal(entry)
 
@@ -1172,9 +1172,9 @@ private fun FinalAmountSheet(state: LedgerState, entryId: String) {
                 }
             } else {
                 val label = when {
-                    diff > 0 && isBuy -> "多付"
+                    diff > 0 && isPurchase -> "多付"
                     diff > 0 -> "多收"
-                    isBuy -> "少付"
+                    isPurchase -> "少付"
                     else -> "少收"
                 }
                 Row(
@@ -1262,8 +1262,8 @@ private fun RenameSettingSheet(state: LedgerState, kind: SettingKind, oldName: S
         focusRequester.requestFocus()
     }
     val category = when (kind) {
-        SettingKind.BUY_TYPES -> "采购类型"
-        SettingKind.SELL_TYPES -> "销售类型"
+        SettingKind.PURCHASE_TYPES -> "采购类型"
+        SettingKind.SALE_TYPES -> "销售类型"
         SettingKind.BUYERS -> "收购商"
     }
     Column {

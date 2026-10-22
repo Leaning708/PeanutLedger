@@ -393,8 +393,8 @@ private fun OverviewCard(summary: StatsSummary, credit: CreditStats) {
         Text("概览", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(12.dp))
         MetricRow(
-            Metric("采购支出", fmtMoney(summary.buyAmount), Primary),
-            Metric("销售收入", fmtMoney(summary.sellAmount), AvatarSell)
+            Metric("采购支出", fmtMoney(summary.purchaseAmount), Primary),
+            Metric("销售收入", fmtMoney(summary.saleAmount), AvatarSell)
         )
         Spacer(Modifier.height(11.dp))
         MetricRow(
@@ -411,8 +411,8 @@ private fun OverviewCard(summary: StatsSummary, credit: CreditStats) {
         )
         Spacer(Modifier.height(11.dp))
         MetricRow(
-            Metric("采购斤数", "${fmtNum(summary.buyWeight)} 斤", Primary),
-            Metric("销售斤数", "${fmtNum(summary.sellWeight)} 斤", AvatarSell)
+            Metric("采购斤数", "${fmtNum(summary.purchaseWeight)} 斤", Primary),
+            Metric("销售斤数", "${fmtNum(summary.saleWeight)} 斤", AvatarSell)
         )
     }
 }

@@ -120,7 +120,7 @@ import kotlin.math.abs
 private data class MainPage(val date: LocalDate, val tab: LedgerTab)
 
 private fun pageOrdinal(page: MainPage): Long =
-    page.date.toEpochDay() * 2L + if (page.tab == LedgerTab.SELL) 1L else 0L
+    page.date.toEpochDay() * 2L + if (page.tab == LedgerTab.SALE) 1L else 0L
 
 @Composable
 fun MainScreen(state: LedgerState) {
@@ -324,11 +324,11 @@ private fun AppHeader(state: LedgerState) {
                         .padding(4.dp),
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    SegmentButton("采购", state.tab == LedgerTab.BUY) {
-                        state.toggleTab(LedgerTab.BUY)
+                    SegmentButton("采购", state.tab == LedgerTab.PURCHASE) {
+                        state.toggleTab(LedgerTab.PURCHASE)
                     }
-                    SegmentButton("销售", state.tab == LedgerTab.SELL) {
-                        state.toggleTab(LedgerTab.SELL)
+                    SegmentButton("销售", state.tab == LedgerTab.SALE) {
+                        state.toggleTab(LedgerTab.SALE)
                     }
                 }
                 HeaderIconButton(
@@ -439,8 +439,8 @@ private fun EntryCard(
     tab: LedgerTab,
     privacyIndex: Int
 ) {
-    val isBuy = tab == LedgerTab.BUY
-    val title = state.displayTitle(entry, tab, if (tab == LedgerTab.SELL) privacyIndex else null)
+    val isPurchase = tab == LedgerTab.PURCHASE
+    val title = state.displayTitle(entry, tab, if (tab == LedgerTab.SALE) privacyIndex else null)
     val revealed = state.isRevealed(entry.id)
     val masked = state.privacyMode && !revealed
     val total = entryTotal(entry)
@@ -448,7 +448,7 @@ private fun EntryCard(
     val hasAdjustedAmount = entryHasAdjustedAmount(entry)
     val final = entryFinal(entry)
     val adjust = round2(final - total)
-    val finalLabel = if (isBuy) "实付" else "实收"
+    val finalLabel = if (isPurchase) "实付" else "实收"
     val itemCount = entry.types.sumOf { it.items.size }
 
     fun money(value: Double): String = if (masked) "****" else fmtMoney(value)
@@ -476,13 +476,13 @@ private fun EntryCard(
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val supplierNumber = if (isBuy) {
-                    entry.name.trim().removePrefix("供货商").removePrefix("户").toIntOrNull()
+                val supplierNumber = if (isPurchase) {
+                    entry.supplierName.trim().removePrefix("供货商").removePrefix("户").toIntOrNull()
                 } else {
                     null
                 }
                 val avatarLabel = when {
-                    !isBuy && state.privacyMode -> privacyIndex.toString()
+                    !isPurchase && state.privacyMode -> privacyIndex.toString()
                     supplierNumber != null -> supplierNumber.toString()
                     title.startsWith("户") && title.length > 1 -> title.removePrefix("户").take(2)
                     else -> title.take(1).ifBlank { "?" }
@@ -498,7 +498,7 @@ private fun EntryCard(
                         append("暂无称重")
                     }
                 }
-                EntryAvatar(avatarLabel, isBuy)
+                EntryAvatar(avatarLabel, isPurchase)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -511,7 +511,7 @@ private fun EntryCard(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
                         )
-                        if (!isBuy) {
+                        if (!isPurchase) {
                             Spacer(Modifier.width(6.dp))
                             SettleTag(entry.settled)
                         }
@@ -600,7 +600,7 @@ private fun EntryCard(
             }
 
             Spacer(Modifier.height(14.dp))
-            val accent = if (isBuy) Primary else AvatarSell
+            val accent = if (isPurchase) Primary else AvatarSell
             if (entry.types.isEmpty()) {
                 Row(
                     modifier = Modifier
@@ -614,7 +614,7 @@ private fun EntryCard(
                     AppIconView(AppIcon.Plus, tint = Primary, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(7.dp))
                     Text(
-                        text = "还没有${if (isBuy) "采购类型" else "销售类型"}，添加一个开始记账",
+                        text = "还没有${if (isPurchase) "采购类型" else "销售类型"}，添加一个开始记账",
                         color = Brown,
                         fontSize = 12.5.sp
                     )
@@ -637,7 +637,7 @@ private fun EntryCard(
                     AppIconView(AppIcon.Plus, tint = Primary, modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        text = "添加${if (isBuy) "采购类型" else "销售类型"}",
+                        text = "添加${if (isPurchase) "采购类型" else "销售类型"}",
                         color = Primary,
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.Medium
@@ -694,9 +694,9 @@ private fun EntryCard(
                     if (abs(adjust) >= 0.005 && !masked) {
                         Spacer(Modifier.height(4.dp))
                         val adjustLabel = when {
-                            adjust > 0 && isBuy -> "多付"
+                            adjust > 0 && isPurchase -> "多付"
                             adjust > 0 -> "多收"
-                            isBuy -> "少付"
+                            isPurchase -> "少付"
                             else -> "少收"
                         }
                         Row(
@@ -732,8 +732,8 @@ private fun EntryCard(
 }
 
 @Composable
-private fun EntryAvatar(label: String, isBuy: Boolean) {
-    val base = if (isBuy) AvatarBuy else AvatarSell
+private fun EntryAvatar(label: String, isPurchase: Boolean) {
+    val base = if (isPurchase) AvatarBuy else AvatarSell
     val start = lerp(base, Color.White, 0.28f)
     Box(
         modifier = Modifier
@@ -840,20 +840,20 @@ private fun TypeSection(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = fmtNum(item.weight),
-                        color = TextSoft,
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    UnitText(" 斤")
-                    Text("  ×  ", color = Placeholder, fontSize = 10.sp)
-                    Text(
                         text = if (masked) "****" else fmtNum(item.price),
                         color = TextSoft,
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     UnitText(" 元")
+                    Text("  ×  ", color = Placeholder, fontSize = 10.sp)
+                    Text(
+                        text = fmtNum(item.weight),
+                        color = TextSoft,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    UnitText(" 斤")
                 }
                 if (masked) {
                     Text(
@@ -916,10 +916,10 @@ private fun EmptyState(tab: LedgerTab) {
             modifier = Modifier
                 .size(88.dp)
                 .clip(CircleShape)
-                .background(if (tab == LedgerTab.BUY) GoldBg else GreenBg),
+                .background(if (tab == LedgerTab.PURCHASE) GoldBg else GreenBg),
             contentAlignment = Alignment.Center
         ) {
-            if (tab == LedgerTab.BUY) {
+            if (tab == LedgerTab.PURCHASE) {
                 PeanutMark(
                     tint = Primary.copy(alpha = 0.82f),
                     detailTint = GoldBg.copy(alpha = 0.92f),
@@ -935,7 +935,7 @@ private fun EmptyState(tab: LedgerTab) {
         }
         Spacer(Modifier.height(18.dp))
         Text(
-            text = if (tab == LedgerTab.BUY) "这一天还没有采购记录" else "这一天还没有销售记录",
+            text = if (tab == LedgerTab.PURCHASE) "这一天还没有采购记录" else "这一天还没有销售记录",
             color = TextSoft,
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
@@ -943,7 +943,7 @@ private fun EmptyState(tab: LedgerTab) {
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = if (tab == LedgerTab.BUY) "点击下方「新增采购」记下第一笔" else "点击下方「新增销售」记下第一笔",
+            text = if (tab == LedgerTab.PURCHASE) "点击下方「新增采购」记下第一笔" else "点击下方「新增销售」记下第一笔",
             color = Muted,
             fontSize = 12.5.sp,
             textAlign = TextAlign.Center
@@ -954,20 +954,20 @@ private fun EmptyState(tab: LedgerTab) {
 @Composable
 private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier = Modifier) {
     val day = state.day(state.currentDate)
-    val buyWeight = round2(
-        day.buys.sumOf { entry ->
+    val purchaseWeight = round2(
+        day.purchases.sumOf { entry ->
             entry.types.sumOf { type -> type.items.sumOf { it.weight } }
         }
     )
-    val sellWeight = round2(
-        day.sells.sumOf { entry ->
+    val saleWeight = round2(
+        day.sales.sumOf { entry ->
             entry.types.sumOf { type -> type.items.sumOf { it.weight } }
         }
     )
-    val buyAvg = if (buyWeight > 0.0001) round2(stats.buy / buyWeight) else null
-    val sellAvg = if (sellWeight > 0.0001) round2(stats.sell / sellWeight) else null
+    val purchaseAvg = if (purchaseWeight > 0.0001) round2(stats.purchase / purchaseWeight) else null
+    val saleAvg = if (saleWeight > 0.0001) round2(stats.sale / saleWeight) else null
     val creditAmount = round2(
-        day.sells.filter { !it.settled }.sumOf { entryFinal(it) }
+        day.sales.filter { !it.settled }.sumOf { entryFinal(it) }
     )
     var expanded by remember { mutableStateOf(false) }
     LaunchedEffect(state.currentDate, state.tab) { expanded = false }
@@ -1067,7 +1067,7 @@ private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier =
                             text = if (state.privacyMode) {
                                 "采购 ****  ·  销售 ****"
                             } else {
-                                "采购 ${fmtMoney(stats.buy)}  ·  销售 ${fmtMoney(stats.sell)}"
+                                "采购 ${fmtMoney(stats.purchase)}  ·  销售 ${fmtMoney(stats.sale)}"
                             },
                             color = Muted,
                             fontSize = 10.5.sp,
@@ -1090,7 +1090,7 @@ private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier =
                         AppIconView(AppIcon.Plus, tint = CardWhite, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(5.dp))
                         Text(
-                            text = if (state.tab == LedgerTab.BUY) "新增采购" else "新增销售",
+                            text = if (state.tab == LedgerTab.PURCHASE) "新增采购" else "新增销售",
                             color = CardWhite,
                             fontSize = 13.5.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -1130,25 +1130,25 @@ private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier =
                     Spacer(Modifier.height(4.dp))
                     BottomMetricRow(
                         label = "金额",
-                        left = if (state.privacyMode) "**** 元" else fmtYuan(stats.buy),
-                        right = if (state.privacyMode) "**** 元" else fmtYuan(stats.sell)
+                        left = if (state.privacyMode) "**** 元" else fmtYuan(stats.purchase),
+                        right = if (state.privacyMode) "**** 元" else fmtYuan(stats.sale)
                     )
                     BottomMetricRow(
                         label = "斤数",
-                        left = if (state.privacyMode) "**** 斤" else "${fmtNum(buyWeight)} 斤",
-                        right = if (state.privacyMode) "**** 斤" else "${fmtNum(sellWeight)} 斤"
+                        left = if (state.privacyMode) "**** 斤" else "${fmtNum(purchaseWeight)} 斤",
+                        right = if (state.privacyMode) "**** 斤" else "${fmtNum(saleWeight)} 斤"
                     )
                     BottomMetricRow(
                         label = "均价",
                         left = when {
                             state.privacyMode -> "**** 元/斤"
-                            buyAvg == null -> "—"
-                            else -> fmtAvgYuan(buyAvg)
+                            purchaseAvg == null -> "—"
+                            else -> fmtAvgYuan(purchaseAvg)
                         },
                         right = when {
                             state.privacyMode -> "**** 元/斤"
-                            sellAvg == null -> "—"
-                            else -> fmtAvgYuan(sellAvg)
+                            saleAvg == null -> "—"
+                            else -> fmtAvgYuan(saleAvg)
                         }
                     )
                     Spacer(Modifier.height(6.dp))

@@ -23,7 +23,6 @@ import com.peanut.ledger.data.LedgerType
 import com.peanut.ledger.data.NamedOption
 import com.peanut.ledger.data.newId
 import com.peanut.ledger.data.nextSupplierName
-import com.peanut.ledger.data.nextSupplierNumber
 import com.peanut.ledger.data.round2
 import com.peanut.ledger.ui.theme.AppTheme
 import com.peanut.ledger.ui.theme.setActiveTheme
@@ -35,8 +34,8 @@ enum class AppScreen { MAIN, SETTINGS, STATS, BACKUP }
 enum class CalendarMode { DAY, MONTH, YEAR }
 
 enum class SettingKind(val label: String, val placeholder: String) {
-    BUY_TYPES("采购类型", "例如：特大果"),
-    SELL_TYPES("销售类型", "例如：统货米"),
+    PURCHASE_TYPES("采购类型", "例如：特大果"),
+    SALE_TYPES("销售类型", "例如：统货米"),
     BUYERS("收购商", "例如：某某油厂")
 }
 
@@ -80,7 +79,7 @@ class LedgerState(private val context: Context) {
     var lastToday: LocalDate = LocalDate.now()
         private set
 
-    var tab by mutableStateOf(LedgerTab.BUY)
+    var tab by mutableStateOf(LedgerTab.PURCHASE)
         private set
 
     var screen by mutableStateOf(AppScreen.MAIN)
@@ -159,7 +158,7 @@ class LedgerState(private val context: Context) {
     val currentDay: DayData get() = data.day(currentDate)
 
     val currentEntries: List<LedgerEntry>
-        get() = if (tab == LedgerTab.BUY) currentDay.buys else currentDay.sells
+        get() = if (tab == LedgerTab.PURCHASE) currentDay.purchases else currentDay.sales
 
     val privacyMode: Boolean get() = data.settings.privacyMode
 
@@ -170,12 +169,12 @@ class LedgerState(private val context: Context) {
         targetTab: LedgerTab = tab,
         displayIndex: Int? = null
     ): String {
-        if (targetTab == LedgerTab.SELL && privacyMode) {
+        if (targetTab == LedgerTab.SALE && privacyMode) {
             val number = displayIndex
-                ?: (currentDay.sells.indexOfFirst { it.id == entry.id } + 1).takeIf { it > 0 }
+                ?: (currentDay.sales.indexOfFirst { it.id == entry.id } + 1).takeIf { it > 0 }
             return if (number != null) "收购商$number" else "收购商"
         }
-        return entry.title(targetTab)
+        return entry.partyName(targetTab)
     }
 
     fun toggleTab(next: LedgerTab) {
@@ -196,24 +195,24 @@ class LedgerState(private val context: Context) {
         sheet = null
     }
 
-    /** Swipe left: buy -> sell (same day), sell -> buy (next day). */
+    /** Swipe left: purchase -> sale (same day), sale -> purchase (next day). */
     fun swipeForwardPage() {
-        if (tab == LedgerTab.BUY) {
-            tab = LedgerTab.SELL
+        if (tab == LedgerTab.PURCHASE) {
+            tab = LedgerTab.SALE
         } else {
-            tab = LedgerTab.BUY
+            tab = LedgerTab.PURCHASE
             currentDate = currentDate.plusDays(1)
         }
         revealedEntryId = null
         sheet = null
     }
 
-    /** Swipe right: sell -> buy (same day), buy -> sell (previous day). */
+    /** Swipe right: sale -> purchase (same day), purchase -> sale (previous day). */
     fun swipeBackwardPage() {
-        if (tab == LedgerTab.SELL) {
-            tab = LedgerTab.BUY
+        if (tab == LedgerTab.SALE) {
+            tab = LedgerTab.PURCHASE
         } else {
-            tab = LedgerTab.SELL
+            tab = LedgerTab.SALE
             currentDate = currentDate.minusDays(1)
         }
         revealedEntryId = null
@@ -488,7 +487,7 @@ class LedgerState(private val context: Context) {
         backupRevision++
         currentDate = LocalDate.now()
         lastToday = LocalDate.now()
-        tab = LedgerTab.BUY
+        tab = LedgerTab.PURCHASE
         revealedEntryId = null
         sheet = null
         showToast("已恢复 ${info.timeLabel} 的备份")
@@ -543,68 +542,68 @@ class LedgerState(private val context: Context) {
 
     fun findEntry(entryId: String): LedgerEntry? {
         val day = currentDay
-        return day.buys.firstOrNull { it.id == entryId } ?: day.sells.firstOrNull { it.id == entryId }
+        return day.purchases.firstOrNull { it.id == entryId } ?: day.sales.firstOrNull { it.id == entryId }
     }
 
     fun statsOf(date: LocalDate): DayStats {
         val day = data.days[date.toString()] ?: return DayStats(0.0, 0.0)
         return DayStats(
-            buy = round2(day.buys.sumOf { com.peanut.ledger.data.entryFinal(it) }),
-            sell = round2(day.sells.sumOf { com.peanut.ledger.data.entryFinal(it) })
+            purchase = round2(day.purchases.sumOf { com.peanut.ledger.data.entryFinal(it) }),
+            sale = round2(day.sales.sumOf { com.peanut.ledger.data.entryFinal(it) })
         )
     }
 
     fun dayHasUnsettled(date: LocalDate): Boolean =
-        data.days[date.toString()]?.sells?.any { !it.settled } == true
+        data.days[date.toString()]?.sales?.any { !it.settled } == true
 
     fun monthHasUnsettled(year: Int, month: Int): Boolean {
         val prefix = String.format("%04d-%02d", year, month)
-        return data.days.any { (key, day) -> key.startsWith(prefix) && day.sells.any { !it.settled } }
+        return data.days.any { (key, day) -> key.startsWith(prefix) && day.sales.any { !it.settled } }
     }
 
     fun yearHasUnsettled(year: Int): Boolean {
         val prefix = String.format("%04d-", year)
-        return data.days.any { (key, day) -> key.startsWith(prefix) && day.sells.any { !it.settled } }
+        return data.days.any { (key, day) -> key.startsWith(prefix) && day.sales.any { !it.settled } }
     }
 
     fun monthSummary(year: Int, month: Int): DayStats {
         val prefix = String.format("%04d-%02d-", year, month)
-        var buy = 0.0
-        var sell = 0.0
+        var purchaseTotal = 0.0
+        var saleTotal = 0.0
         data.days.forEach { (key, day) ->
             if (key.startsWith(prefix)) {
-                buy += day.buys.sumOf { com.peanut.ledger.data.entryFinal(it) }
-                sell += day.sells.sumOf { com.peanut.ledger.data.entryFinal(it) }
+                purchaseTotal += day.purchases.sumOf { com.peanut.ledger.data.entryFinal(it) }
+                saleTotal += day.sales.sumOf { com.peanut.ledger.data.entryFinal(it) }
             }
         }
-        return DayStats(round2(buy), round2(sell))
+        return DayStats(round2(purchaseTotal), round2(saleTotal))
     }
 
     fun yearSummary(year: Int): DayStats {
         val prefix = String.format("%04d-", year)
-        var buy = 0.0
-        var sell = 0.0
+        var purchaseTotal = 0.0
+        var saleTotal = 0.0
         data.days.forEach { (key, day) ->
             if (key.startsWith(prefix)) {
-                buy += day.buys.sumOf { com.peanut.ledger.data.entryFinal(it) }
-                sell += day.sells.sumOf { com.peanut.ledger.data.entryFinal(it) }
+                purchaseTotal += day.purchases.sumOf { com.peanut.ledger.data.entryFinal(it) }
+                saleTotal += day.sales.sumOf { com.peanut.ledger.data.entryFinal(it) }
             }
         }
-        return DayStats(round2(buy), round2(sell))
+        return DayStats(round2(purchaseTotal), round2(saleTotal))
     }
 
     fun rangeSummary(startYear: Int, count: Int = 12): DayStats {
-        var buy = 0.0
-        var sell = 0.0
+        var purchaseTotal = 0.0
+        var saleTotal = 0.0
         for (year in startYear until startYear + count) {
             val summary = yearSummary(year)
-            buy += summary.buy
-            sell += summary.sell
+            purchaseTotal += summary.purchase
+            saleTotal += summary.sale
         }
-        return DayStats(round2(buy), round2(sell))
+        return DayStats(round2(purchaseTotal), round2(saleTotal))
     }
 
-    fun nextSupplierName(): String = nextSupplierName(currentDay.buys)
+    fun nextSupplierName(): String = nextSupplierName(currentDay.purchases)
 
     fun addEntry(
         name: String,
@@ -612,15 +611,15 @@ class LedgerState(private val context: Context) {
         location: EntryLocation? = null
     ) {
         var openTypeFor: String? = null
-        if (tab == LedgerTab.BUY) {
+        if (tab == LedgerTab.PURCHASE) {
             val finalName = name.trim().ifBlank { nextSupplierName() }
             val entry = LedgerEntry(
                 id = newId(),
-                name = finalName,
+                supplierName = finalName,
                 createdAt = System.currentTimeMillis(),
                 location = location
             )
-            updateDay { it.copy(buys = it.buys + entry) }
+            updateDay { it.copy(purchases = it.purchases + entry) }
             openTypeFor = entry.id
             showToast("已添加 $finalName，请选择采购类型")
         } else {
@@ -636,19 +635,20 @@ class LedgerState(private val context: Context) {
             }
             val entry = LedgerEntry(
                 id = newId(),
-                buyer = finalBuyer,
+                buyerName = finalBuyer,
                 settled = data.settings.defaultSettled,
                 createdAt = System.currentTimeMillis()
             )
-            updateDay { it.copy(sells = it.sells + entry) }
-            showToast("已添加 $finalBuyer")
+            updateDay { it.copy(sales = it.sales + entry) }
+            openTypeFor = entry.id
+            showToast("已添加 $finalBuyer，请选择销售类型")
         }
         persist()
         sheet = openTypeFor?.let { Sheet.AddType(it) }
     }
 
     fun renameEntry(entryId: String, newName: String) {
-        if (tab != LedgerTab.BUY) {
+        if (tab != LedgerTab.PURCHASE) {
             showToast("收购商名称请在设置中修改")
             return
         }
@@ -657,7 +657,7 @@ class LedgerState(private val context: Context) {
             showToast("请输入名称")
             return
         }
-        updateEntry(entryId) { entry -> entry.copy(name = clean) }
+        updateEntry(entryId) { entry -> entry.copy(supplierName = clean) }
         sheet = null
         showToast("已修改")
     }
@@ -665,20 +665,20 @@ class LedgerState(private val context: Context) {
     private fun normalizeSupplierNames() {
         var changed = false
         val days = data.days.mapValues { (_, day) ->
-            val buys = day.buys.map { entry ->
-                val clean = entry.name.trim()
+            val purchases = day.purchases.map { entry ->
+                val clean = entry.supplierName.trim()
                 val number = when {
                     clean.startsWith("户") -> clean.removePrefix("户").toIntOrNull()
                     else -> clean.toIntOrNull()
                 }
                 if (number != null && clean != "供货商$number") {
                     changed = true
-                    entry.copy(name = "供货商$number")
+                    entry.copy(supplierName = "供货商$number")
                 } else {
                     entry
                 }
             }
-            if (buys != day.buys) day.copy(buys = buys) else day
+            if (purchases != day.purchases) day.copy(purchases = purchases) else day
         }
         if (changed) {
             data = data.copy(days = days)
@@ -689,8 +689,8 @@ class LedgerState(private val context: Context) {
     private fun ensureSaleBuyersBound() {
         val existing = data.settings.buyers.map { it.name }.toSet()
         val missing = data.days.values
-            .flatMap { it.sells }
-            .map { it.buyer.trim() }
+            .flatMap { it.sales }
+            .map { it.buyerName.trim() }
             .filter { it.isNotBlank() && it !in existing }
             .distinct()
         if (missing.isEmpty()) return
@@ -723,8 +723,8 @@ class LedgerState(private val context: Context) {
             ) {
                 updateDay { day ->
                     day.copy(
-                        buys = day.buys.filterNot { it.id == entryId },
-                        sells = day.sells.filterNot { it.id == entryId }
+                        purchases = day.purchases.filterNot { it.id == entryId },
+                        sales = day.sales.filterNot { it.id == entryId }
                     )
                 }
                 if (revealedEntryId == entryId) revealedEntryId = null
@@ -882,7 +882,7 @@ class LedgerState(private val context: Context) {
         val entry = findEntry(entryId) ?: return null
         com.peanut.ledger.data.findLastPriceInEntry(entry, typeId)?.let { return it }
 
-        val targetName = entry.title(tab)
+        val targetName = entry.partyName(tab)
         val targetType = entry.types.firstOrNull { it.id == typeId }?.name ?: return null
         if (targetName.isBlank() || targetType.isBlank()) return null
         val dates = data.days.keys.sortedDescending()
@@ -890,7 +890,7 @@ class LedgerState(private val context: Context) {
             if (key == currentDate.toString()) continue
             val day = data.days[key] ?: continue
             val list = day.entries(tab)
-            val match = list.firstOrNull { it.title(tab) == targetName } ?: continue
+            val match = list.firstOrNull { it.partyName(tab) == targetName } ?: continue
             val type = match.types.firstOrNull { it.name == targetType } ?: continue
             type.items.lastOrNull()?.let { return it.price }
         }
@@ -900,8 +900,8 @@ class LedgerState(private val context: Context) {
     fun addPreset(name: String) {
         val clean = name.trim()
         if (clean.isBlank()) return
-        val isBuy = tab == LedgerTab.BUY
-        val list = if (isBuy) data.settings.buyTypes else data.settings.sellTypes
+        val isPurchase = tab == LedgerTab.PURCHASE
+        val list = if (isPurchase) data.settings.purchaseTypes else data.settings.saleTypes
         val index = list.indexOfFirst { it.name == clean }
         val next = if (index >= 0) {
             if (list[index].active) return
@@ -910,10 +910,10 @@ class LedgerState(private val context: Context) {
             list + NamedOption(clean)
         }
         data = data.copy(
-            settings = if (isBuy) {
-                data.settings.copy(buyTypes = next)
+            settings = if (isPurchase) {
+                data.settings.copy(purchaseTypes = next)
             } else {
-                data.settings.copy(sellTypes = next)
+                data.settings.copy(saleTypes = next)
             }
         )
         persist()
@@ -922,9 +922,9 @@ class LedgerState(private val context: Context) {
     fun activeSettingsNames(kind: SettingKind): List<String> =
         settingsList(kind).filter { it.active }.map { it.name }
 
-    fun activeBuyTypes(): List<String> = activeSettingsNames(SettingKind.BUY_TYPES)
+    fun activeBuyTypes(): List<String> = activeSettingsNames(SettingKind.PURCHASE_TYPES)
 
-    fun activeSellTypes(): List<String> = activeSettingsNames(SettingKind.SELL_TYPES)
+    fun activeSellTypes(): List<String> = activeSettingsNames(SettingKind.SALE_TYPES)
 
     fun activeBuyers(): List<String> = activeSettingsNames(SettingKind.BUYERS)
 
@@ -988,11 +988,11 @@ class LedgerState(private val context: Context) {
 
     fun lastUsedType(targetTab: LedgerTab = tab): String? {
         val entries = data.days.values
-            .flatMap { if (targetTab == LedgerTab.BUY) it.buys else it.sells }
+            .flatMap { if (targetTab == LedgerTab.PURCHASE) it.purchases else it.sales }
             .filter { it.types.isNotEmpty() }
         val last = entries.maxByOrNull { it.createdAt }?.types?.lastOrNull()?.name
         val active = activeSettingsNames(
-            if (targetTab == LedgerTab.BUY) SettingKind.BUY_TYPES else SettingKind.SELL_TYPES
+            if (targetTab == LedgerTab.PURCHASE) SettingKind.PURCHASE_TYPES else SettingKind.SALE_TYPES
         )
         return when {
             last == null -> active.firstOrNull()
@@ -1002,14 +1002,14 @@ class LedgerState(private val context: Context) {
     }
 
     fun settingUsage(kind: SettingKind, name: String): Int = when (kind) {
-        SettingKind.BUY_TYPES -> data.days.values.sumOf { day ->
-            day.buys.count { entry -> entry.types.any { it.name == name } }
+        SettingKind.PURCHASE_TYPES -> data.days.values.sumOf { day ->
+            day.purchases.count { entry -> entry.types.any { it.name == name } }
         }
-        SettingKind.SELL_TYPES -> data.days.values.sumOf { day ->
-            day.sells.count { entry -> entry.types.any { it.name == name } }
+        SettingKind.SALE_TYPES -> data.days.values.sumOf { day ->
+            day.sales.count { entry -> entry.types.any { it.name == name } }
         }
         SettingKind.BUYERS -> data.days.values.sumOf { day ->
-            day.sells.count { it.buyer == name }
+            day.sales.count { it.buyerName == name }
         }
     }
 
@@ -1078,15 +1078,15 @@ class LedgerState(private val context: Context) {
     }
 
     fun settingsList(kind: SettingKind): List<NamedOption> = when (kind) {
-        SettingKind.BUY_TYPES -> data.settings.buyTypes
-        SettingKind.SELL_TYPES -> data.settings.sellTypes
+        SettingKind.PURCHASE_TYPES -> data.settings.purchaseTypes
+        SettingKind.SALE_TYPES -> data.settings.saleTypes
         SettingKind.BUYERS -> data.settings.buyers
     }
 
     private fun updateSettingsList(kind: SettingKind, list: List<NamedOption>) {
         val next = when (kind) {
-            SettingKind.BUY_TYPES -> data.settings.copy(buyTypes = list)
-            SettingKind.SELL_TYPES -> data.settings.copy(sellTypes = list)
+            SettingKind.PURCHASE_TYPES -> data.settings.copy(purchaseTypes = list)
+            SettingKind.SALE_TYPES -> data.settings.copy(saleTypes = list)
             SettingKind.BUYERS -> data.settings.copy(buyers = list)
         }
         data = data.copy(settings = next)
@@ -1095,19 +1095,19 @@ class LedgerState(private val context: Context) {
 
     private fun renameInDay(kind: SettingKind, day: DayData, oldName: String, newName: String): DayData =
         when (kind) {
-            SettingKind.BUY_TYPES -> day.copy(
-                buys = day.buys.map {
+            SettingKind.PURCHASE_TYPES -> day.copy(
+                purchases = day.purchases.map {
                     it.copy(types = renameTypes(it.types, oldName, newName))
                 }
             )
-            SettingKind.SELL_TYPES -> day.copy(
-                sells = day.sells.map {
+            SettingKind.SALE_TYPES -> day.copy(
+                sales = day.sales.map {
                     it.copy(types = renameTypes(it.types, oldName, newName))
                 }
             )
             SettingKind.BUYERS -> day.copy(
-                sells = day.sells.map {
-                    if (it.buyer == oldName) it.copy(buyer = newName) else it
+                sales = day.sales.map {
+                    if (it.buyerName == oldName) it.copy(buyerName = newName) else it
                 }
             )
         }
@@ -1152,15 +1152,15 @@ class LedgerState(private val context: Context) {
         val type = entry.types.firstOrNull { it.id == typeId } ?: return
         if (type.items.isNotEmpty()) return
         val day = currentDay
-        val affectedBuy = day.buys.any { it.id == entryId }
-        val affectedSell = day.sells.any { it.id == entryId }
+        val affectedBuy = day.purchases.any { it.id == entryId }
+        val affectedSell = day.sales.any { it.id == entryId }
         if (!affectedBuy && !affectedSell) return
         updateDay { current ->
             current.copy(
-                buys = current.buys.map {
+                purchases = current.purchases.map {
                     if (it.id == entryId) it.copy(types = it.types.filterNot { t -> t.id == typeId }) else it
                 },
-                sells = current.sells.map {
+                sales = current.sales.map {
                     if (it.id == entryId) it.copy(types = it.types.filterNot { t -> t.id == typeId }) else it
                 }
             )
@@ -1170,10 +1170,10 @@ class LedgerState(private val context: Context) {
     private fun pruneAllEmptyTypes() {
         val cleaned = data.days.mapValues { (_, day) ->
             day.copy(
-                buys = day.buys.map { entry ->
+                purchases = day.purchases.map { entry ->
                     entry.copy(types = entry.types.filter { it.items.isNotEmpty() })
                 },
-                sells = day.sells.map { entry ->
+                sales = day.sales.map { entry ->
                     entry.copy(types = entry.types.filter { it.items.isNotEmpty() })
                 }
             )
@@ -1194,8 +1194,8 @@ class LedgerState(private val context: Context) {
     private fun updateEntry(entryId: String, transform: (LedgerEntry) -> LedgerEntry) {
         updateDay { day ->
             day.copy(
-                buys = day.buys.map { if (it.id == entryId) transform(it) else it },
-                sells = day.sells.map { if (it.id == entryId) transform(it) else it }
+                purchases = day.purchases.map { if (it.id == entryId) transform(it) else it },
+                sales = day.sales.map { if (it.id == entryId) transform(it) else it }
             )
         }
     }
