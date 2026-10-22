@@ -55,6 +55,7 @@ fun PeanutLedgerApp(state: LedgerState) {
             when (state.screen) {
                 AppScreen.MAIN -> MainScreen(state)
                 AppScreen.SETTINGS -> SettingsScreen(state)
+                AppScreen.STATS -> StatsScreen(state)
             }
             SheetHost(state)
             ToastHost(state)

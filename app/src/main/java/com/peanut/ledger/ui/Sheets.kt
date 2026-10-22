@@ -186,8 +186,13 @@ private fun MoreSheet(state: LedgerState) {
     val hasRemark = state.currentDay.remark.isNotBlank()
     val remarkLabel = if (state.currentDate == LocalDate.now()) "今日备注" else "当日备注"
     Column {
-        SheetTitle("更多", "备注、隐私与偏好设置")
+        SheetTitle("更多", "统计、备注与隐私设置")
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SheetActionItem(
+                text = "统计",
+                icon = AppIcon.Chart,
+                onClick = { state.openStats() }
+            )
             SheetActionItem(
                 text = if (hasRemark) "编辑$remarkLabel" else "添加$remarkLabel",
                 icon = AppIcon.Note,

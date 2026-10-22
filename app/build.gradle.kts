@@ -15,8 +15,8 @@ android {
         targetSdk = 37
         // 版本号约定见 VERSION.md：未获用户明确要求不改前两位，只递增最后一位；
         // versionCode 与语义版本分开维护，仅用于安装升级。
-        versionCode = 7
-        versionName = "0.1.1"
+        versionCode = 8
+        versionName = "0.1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

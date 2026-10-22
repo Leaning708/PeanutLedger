@@ -34,7 +34,8 @@ enum class AppIcon {
     Tag,
     Cash,
     DragHandle,
-    Pin
+    Pin,
+    Chart
 }
 
 @Composable
@@ -235,6 +236,17 @@ fun AppIconView(
                 line(5f, 8f, 19f, 8f)
                 line(5f, 12f, 19f, 12f)
                 line(5f, 16f, 19f, 16f)
+            }
+
+            AppIcon.Chart -> {
+                line(4f, 20f, 20f, 20f)
+                line(4f, 20f, 4f, 4f)
+                strokePath {
+                    moveTo(dx + 7f * s, dy + 16f * s)
+                    lineTo(dx + 11f * s, dy + 11f * s)
+                    lineTo(dx + 14f * s, dy + 13.5f * s)
+                    lineTo(dx + 20f * s, dy + 6f * s)
+                }
             }
 
             AppIcon.Pin -> {

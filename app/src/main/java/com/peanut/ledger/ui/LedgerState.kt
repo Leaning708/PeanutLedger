@@ -2,6 +2,7 @@ package com.peanut.ledger.ui
 
 import android.content.Context
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.peanut.ledger.data.DayData
@@ -23,7 +24,7 @@ import com.peanut.ledger.ui.theme.setActiveTheme
 import java.time.LocalDate
 import kotlin.math.abs
 
-enum class AppScreen { MAIN, SETTINGS }
+enum class AppScreen { MAIN, SETTINGS, STATS }
 
 enum class CalendarMode { DAY, MONTH, YEAR }
 
@@ -86,6 +87,9 @@ class LedgerState(private val context: Context) {
         private set
 
     var toast by mutableStateOf<ToastMessage?>(null)
+        private set
+
+    var dataRevision by mutableIntStateOf(0)
         private set
 
     var calendarMode by mutableStateOf(CalendarMode.DAY)
@@ -263,6 +267,15 @@ class LedgerState(private val context: Context) {
     }
 
     fun closeSettings() {
+        screen = AppScreen.MAIN
+    }
+
+    fun openStats() {
+        sheet = null
+        screen = AppScreen.STATS
+    }
+
+    fun closeStats() {
         screen = AppScreen.MAIN
     }
 
@@ -940,5 +953,6 @@ class LedgerState(private val context: Context) {
 
     private fun persist() {
         LedgerRepository.save(context, data)
+        dataRevision++
     }
 }
