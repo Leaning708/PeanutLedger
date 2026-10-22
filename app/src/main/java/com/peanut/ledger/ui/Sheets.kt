@@ -69,6 +69,7 @@ import com.peanut.ledger.ui.theme.FieldBg
 import com.peanut.ledger.ui.theme.FieldBorder
 import com.peanut.ledger.ui.theme.GoldBg
 import com.peanut.ledger.ui.theme.Line
+import com.peanut.ledger.ui.theme.LineStrong
 import com.peanut.ledger.ui.theme.Muted
 import com.peanut.ledger.ui.theme.Placeholder
 import com.peanut.ledger.ui.theme.Primary
@@ -411,12 +412,23 @@ private fun AddTypeSheet(state: LedgerState, entryId: String) {
     } else {
         state.activeSellTypes()
     }
-    var customName by remember { mutableStateOf("") }
+    val lastType = state.lastUsedType(state.tab)?.takeIf { it in presets }
+    var selectedName by remember(entryId, state.tab, lastType) {
+        mutableStateOf(lastType ?: presets.firstOrNull().orEmpty())
+    }
+    var customName by remember(entryId, state.tab) { mutableStateOf("") }
     Column {
-        SheetTitle("选择花生类型", "选择预设，或输入一个新的类型")
+        SheetTitle(
+            text = "选择花生类型",
+            subtitle = if (lastType != null && selectedName == lastType) {
+                "已默认选择上次使用的「$lastType」"
+            } else {
+                "选择预设，或输入一个新的类型"
+            }
+        )
         if (presets.isEmpty()) {
             Text(
-                text = "还没有预设类型，可在设置中添加",
+                text = "还没有可用类型，可在下方输入新类型",
                 color = Placeholder,
                 fontSize = 12.5.sp,
                 modifier = Modifier.padding(bottom = 14.dp)
@@ -428,9 +440,14 @@ private fun AddTypeSheet(state: LedgerState, entryId: String) {
                 modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp)
             ) {
                 presets.forEach { name ->
-                    PillChip(
-                        text = name,
-                        onClick = { state.addTypeAndOpen(entryId, name, saveAsPreset = false) }
+                    TypeChoiceChip(
+                        name = name,
+                        selected = customName.isBlank() && selectedName == name,
+                        isLastUsed = name == lastType,
+                        onClick = {
+                            selectedName = name
+                            customName = ""
+                        }
                     )
                 }
             }
@@ -438,7 +455,14 @@ private fun AddTypeSheet(state: LedgerState, entryId: String) {
         FieldLabel("自定义类型")
         LedgerTextField(
             value = customName,
-            onValueChange = { customName = it },
+            onValueChange = {
+                customName = it
+                if (it.isBlank()) {
+                    selectedName = lastType ?: presets.firstOrNull().orEmpty()
+                } else {
+                    selectedName = ""
+                }
+            },
             modifier = Modifier.fillMaxWidth(),
             placeholder = "输入类型名称"
         )
@@ -446,10 +470,73 @@ private fun AddTypeSheet(state: LedgerState, entryId: String) {
         SheetActionRow {
             GhostButton("取消", { state.closeSheet() }, Modifier.weight(1f))
             PrimaryButton(
-                text = "保存",
-                onClick = { state.addTypeAndOpen(entryId, customName, saveAsPreset = true) },
+                text = "下一步",
+                onClick = {
+                    val custom = customName.trim()
+                    when {
+                        custom.isNotEmpty() -> state.addTypeAndOpen(
+                            entryId,
+                            custom,
+                            saveAsPreset = true
+                        )
+                        selectedName.isNotBlank() -> state.addTypeAndOpen(
+                            entryId,
+                            selectedName,
+                            saveAsPreset = false
+                        )
+                        else -> state.showToast("请选择或输入类型")
+                    }
+                },
                 modifier = Modifier.weight(1f)
             )
+        }
+    }
+}
+
+@Composable
+private fun TypeChoiceChip(
+    name: String,
+    selected: Boolean,
+    isLastUsed: Boolean,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        modifier = Modifier
+            .clip(shape)
+            .background(if (selected) Primary else SurfaceSoft)
+            .border(1.dp, if (selected) Primary else LineStrong, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (selected) {
+            AppIconView(AppIcon.Check, tint = CardWhite, modifier = Modifier.size(12.dp))
+            Spacer(Modifier.width(4.dp))
+        }
+        Text(
+            text = name,
+            color = if (selected) CardWhite else TextSoft,
+            fontSize = 14.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+        )
+        if (isLastUsed) {
+            Spacer(Modifier.width(5.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(
+                        if (selected) CardWhite.copy(alpha = 0.22f) else Primary.copy(alpha = 0.1f)
+                    )
+                    .padding(horizontal = 4.dp, vertical = 1.dp)
+            ) {
+                Text(
+                    text = "上次",
+                    color = if (selected) CardWhite else Primary,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }
@@ -483,7 +570,7 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
     var weightText by remember(sheet.formKey) {
         mutableStateOf(item?.weight?.let { fmtNum(it) } ?: "")
     }
-    var errorText by remember(sheet.formKey) { mutableStateOf<String?>(null) }
+
     var priceText by remember(sheet.formKey) {
         mutableStateOf(
             item?.price?.let { fmtNum(it) }
@@ -497,11 +584,9 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
         val weight = round2(weightText.toDoubleOrNull() ?: 0.0)
         val price = round2(priceText.toDoubleOrNull() ?: 0.0)
         if (weight <= 0.0) {
-            errorText = "请输入大于 0 的重量，金额为 0 时不会记录"
-            focusRequester.requestFocus()
+            state.closeSheet()
             return
         }
-        errorText = null
         val saved = state.saveItem(
             entryId = sheet.entryId,
             typeId = sheet.typeId,
@@ -511,7 +596,7 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
             keepOpen = keepOpen
         )
         if (!saved) {
-            focusRequester.requestFocus()
+            state.closeSheet()
         }
     }
 
@@ -525,10 +610,7 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
                 FieldLabel("重量（斤）")
                 LedgerTextField(
                     value = weightText,
-                    onValueChange = {
-                        weightText = it
-                        errorText = null
-                    },
+                    onValueChange = { weightText = it },
                     modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
                     placeholder = "0",
                     keyboardType = KeyboardType.Decimal
@@ -604,15 +686,6 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
                 text = "不可编辑",
                 color = Placeholder,
                 fontSize = 10.sp
-            )
-        }
-        if (errorText != null) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = errorText.orEmpty(),
-                color = Red,
-                fontSize = 11.5.sp,
-                lineHeight = 17.sp
             )
         }
         Spacer(Modifier.height(22.dp))

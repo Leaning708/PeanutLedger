@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,13 +26,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
@@ -38,9 +42,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.peanut.ledger.data.NamedOption
+import com.peanut.ledger.ui.theme.AppTheme
 import com.peanut.ledger.ui.theme.Bg
 import com.peanut.ledger.ui.theme.CardWhite
 import com.peanut.ledger.ui.theme.Green
@@ -51,8 +59,13 @@ import com.peanut.ledger.ui.theme.Primary
 import com.peanut.ledger.ui.theme.Red
 import com.peanut.ledger.ui.theme.RedBg
 import com.peanut.ledger.ui.theme.SurfaceSoft
+import com.peanut.ledger.ui.theme.SurfaceWarm
+import com.peanut.ledger.ui.theme.themeHeaderColors
+import com.peanut.ledger.ui.theme.themePalette
 import com.peanut.ledger.ui.theme.TextMain
 import com.peanut.ledger.ui.theme.TextSoft
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(state: LedgerState) {
@@ -67,6 +80,7 @@ fun SettingsScreen(state: LedgerState) {
             item { SettingsBlock(state, SettingKind.BUY_TYPES) }
             item { SettingsBlock(state, SettingKind.SELL_TYPES) }
             item { SettingsBlock(state, SettingKind.BUYERS) }
+            item { DisplayBlock(state) }
             item { DataBlock(state) }
             item {
                 Column(
@@ -139,10 +153,14 @@ private fun SettingsHeader(state: LedgerState) {
 private fun SettingsBlock(state: LedgerState, kind: SettingKind) {
     val list = state.settingsList(kind)
     var input by remember(kind) { mutableStateOf("") }
+    var draggedName by remember(kind) { mutableStateOf<String?>(null) }
+    var dragOffsetY by remember(kind) { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current
+    val rowStepPx = with(density) { 55.dp.toPx() }
     val description = when (kind) {
-        SettingKind.BUY_TYPES -> "采购时快速选择的花生类型，可排序、重命名或设为失效"
-        SettingKind.SELL_TYPES -> "销售时快速选择的花生类型，可排序、重命名或设为失效"
-        SettingKind.BUYERS -> "销售记录中可选的收购方，可排序、重命名或设为失效"
+        SettingKind.BUY_TYPES -> "长按右侧拖动柄排序；点「···」可重命名、失效或删除"
+        SettingKind.SELL_TYPES -> "长按右侧拖动柄排序；点「···」可重命名、失效或删除"
+        SettingKind.BUYERS -> "长按右侧拖动柄排序；点「···」可重命名、失效或删除"
     }
     LedgerCard(contentPadding = PaddingValues(18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -171,13 +189,36 @@ private fun SettingsBlock(state: LedgerState, kind: SettingKind) {
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 list.forEachIndexed { index, option ->
+                    val isDragging = draggedName == option.name
+                    val dragModifier = Modifier.pointerInput(option.name, list.size) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                draggedName = option.name
+                                dragOffsetY = 0f
+                            },
+                            onDrag = { change, amount ->
+                                change.consume()
+                                dragOffsetY += amount.y
+                            },
+                            onDragEnd = {
+                                val from = list.indexOfFirst { it.name == option.name }
+                                val steps = (dragOffsetY / rowStepPx).roundToInt()
+                                state.moveSettingTo(kind, option.name, from + steps)
+                                draggedName = null
+                                dragOffsetY = 0f
+                            },
+                            onDragCancel = {
+                                draggedName = null
+                                dragOffsetY = 0f
+                            }
+                        )
+                    }
                     SettingOptionRow(
                         option = option,
-                        canMoveUp = index > 0,
-                        canMoveDown = index < list.lastIndex,
-                        onMoveUp = { state.moveSetting(kind, option.name, -1) },
-                        onMoveDown = { state.moveSetting(kind, option.name, 1) },
-                        onActions = { state.openSheet(Sheet.SettingActions(kind, option.name)) }
+                        isDragging = isDragging,
+                        dragOffsetY = if (isDragging) dragOffsetY else 0f,
+                        onActions = { state.openSheet(Sheet.SettingActions(kind, option.name)) },
+                        dragModifier = dragModifier
                     )
                 }
             }
@@ -217,21 +258,30 @@ private fun SettingsBlock(state: LedgerState, kind: SettingKind) {
 @Composable
 private fun SettingOptionRow(
     option: NamedOption,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    onActions: () -> Unit
+    isDragging: Boolean,
+    dragOffsetY: Float,
+    onActions: () -> Unit,
+    dragModifier: Modifier
 ) {
     val shape = RoundedCornerShape(12.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .height(48.dp)
+            .zIndex(if (isDragging) 2f else 0f)
+            .graphicsLayer { translationY = dragOffsetY }
+            .then(if (isDragging) Modifier.shadow(10.dp, shape) else Modifier)
             .clip(shape)
-            .background(if (option.active) SurfaceSoft else SurfaceSoft.copy(alpha = 0.5f))
-            .border(1.dp, Line, shape)
+            .background(
+                if (option.active) {
+                    if (isDragging) SurfaceWarm else SurfaceSoft
+                } else {
+                    SurfaceSoft.copy(alpha = 0.5f)
+                }
+            )
+            .border(1.dp, if (isDragging) Primary.copy(alpha = 0.35f) else Line, shape)
             .clickable(onClick = onActions)
-            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            .padding(start = 12.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -251,24 +301,24 @@ private fun SettingOptionRow(
             modifier = Modifier.weight(1f)
         )
         if (!option.active) {
-            Spacer(Modifier.width(7.dp))
+            Spacer(Modifier.width(6.dp))
             InactiveTag()
         }
-        Spacer(Modifier.width(4.dp))
-        ReorderButton(
-            icon = AppIcon.ChevronDown,
-            description = "上移",
-            enabled = canMoveUp,
-            rotate = 180f,
-            onClick = onMoveUp
-        )
-        ReorderButton(
-            icon = AppIcon.ChevronDown,
-            description = "下移",
-            enabled = canMoveDown,
-            rotate = 0f,
-            onClick = onMoveDown
-        )
+        Spacer(Modifier.width(2.dp))
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .semantics { contentDescription = "长按拖动排序" }
+                .then(dragModifier),
+            contentAlignment = Alignment.Center
+        ) {
+            AppIconView(
+                icon = AppIcon.DragHandle,
+                tint = if (option.active) Muted else Placeholder.copy(alpha = 0.7f),
+                modifier = Modifier.size(16.dp)
+            )
+        }
         Box(
             modifier = Modifier
                 .size(30.dp)
@@ -283,30 +333,6 @@ private fun SettingOptionRow(
 }
 
 @Composable
-private fun ReorderButton(
-    icon: AppIcon,
-    description: String,
-    enabled: Boolean,
-    rotate: Float,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .size(30.dp)
-            .clip(CircleShape)
-            .semantics { contentDescription = description }
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        AppIconView(
-            icon = icon,
-            tint = if (enabled) Muted else Placeholder.copy(alpha = 0.45f),
-            modifier = Modifier.size(14.dp).rotate(rotate)
-        )
-    }
-}
-
-@Composable
 private fun InactiveTag() {
     Box(
         modifier = Modifier
@@ -317,6 +343,124 @@ private fun InactiveTag() {
         Text("已失效", color = Muted, fontSize = 9.5.sp, fontWeight = FontWeight.Medium)
     }
 }
+
+@Composable
+private fun DisplayBlock(state: LedgerState) {
+    LedgerCard(contentPadding = PaddingValues(18.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("显示与主题", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.width(8.dp))
+            CounterTag("本机")
+        }
+        Spacer(Modifier.height(3.dp))
+        Text("调整字体大小和整体配色，修改后立即生效", color = Muted, fontSize = 11.5.sp)
+        Spacer(Modifier.height(14.dp))
+        Text("字体大小", color = Muted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            fontScaleOptions.forEach { option ->
+                val selected = abs(state.fontScale - option.scale) < 0.01f
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(if (selected) Primary else SurfaceSoft)
+                        .border(
+                            1.dp,
+                            if (selected) Primary else Line,
+                            RoundedCornerShape(11.dp)
+                        )
+                        .clickable { state.setFontScale(option.scale) }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = option.label,
+                        color = if (selected) CardWhite else TextSoft,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("主题配色", color = Muted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            AppTheme.entries.forEach { theme ->
+                val selected = state.themeId == theme.id
+                val palette = themePalette(theme)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(13.dp))
+                        .border(
+                            if (selected) 2.dp else 1.dp,
+                            if (selected) Primary else Line,
+                            RoundedCornerShape(13.dp)
+                        )
+                        .clickable { state.setTheme(theme.id) }
+                        .padding(5.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(Brush.linearGradient(themeHeaderColors(theme))),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        PeanutMark(
+                            tint = CardWhite.copy(alpha = 0.35f),
+                            detailTint = CardWhite.copy(alpha = 0.12f),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(6.dp)
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(palette.bgOuter)
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = theme.label,
+                            color = if (selected) Primary else Muted,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (selected) {
+                            Spacer(Modifier.width(3.dp))
+                            AppIconView(
+                                icon = AppIcon.Check,
+                                tint = Primary,
+                                modifier = Modifier.size(11.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private data class FontScaleOption(val label: String, val scale: Float)
+
+private val fontScaleOptions = listOf(
+    FontScaleOption("标准", 1.0f),
+    FontScaleOption("大", 1.15f),
+    FontScaleOption("特大", 1.3f)
+)
 
 @Composable
 private fun DataBlock(state: LedgerState) {

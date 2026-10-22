@@ -72,9 +72,8 @@ import com.peanut.ledger.ui.theme.SurfaceWarm
 import com.peanut.ledger.ui.theme.TextMain
 import com.peanut.ledger.ui.theme.TextSoft
 
-val TopGradient = Brush.linearGradient(
-    colors = listOf(HeaderStart, HeaderMid, HeaderEnd)
-)
+val TopGradient: Brush
+    get() = Brush.linearGradient(colors = listOf(HeaderStart, HeaderMid, HeaderEnd))
 
 @Composable
 fun LedgerCard(

@@ -17,6 +17,8 @@ import com.peanut.ledger.data.NamedOption
 import com.peanut.ledger.data.newId
 import com.peanut.ledger.data.nextFarmerName
 import com.peanut.ledger.data.round2
+import com.peanut.ledger.ui.theme.AppTheme
+import com.peanut.ledger.ui.theme.setActiveTheme
 import java.time.LocalDate
 import kotlin.math.abs
 
@@ -95,6 +97,33 @@ class LedgerState(private val context: Context) {
 
     val settings: LedgerSettings get() = data.settings
 
+    val fontScale: Float get() = data.settings.fontScale
+
+    val themeId: String get() = data.settings.theme
+
+    init {
+        setActiveTheme(AppTheme.fromId(data.settings.theme))
+        pruneAllEmptyTypes()
+    }
+
+    fun setFontScale(scale: Float) {
+        val clean = scale.coerceIn(1.0f, 1.3f)
+        if (data.settings.fontScale == clean) return
+        data = data.copy(settings = data.settings.copy(fontScale = clean))
+        persist()
+    }
+
+    fun setTheme(themeId: String) {
+        val theme = AppTheme.fromId(themeId)
+        if (data.settings.theme == theme.id) {
+            setActiveTheme(theme)
+            return
+        }
+        data = data.copy(settings = data.settings.copy(theme = theme.id))
+        setActiveTheme(theme)
+        persist()
+    }
+
     val currentDay: DayData get() = data.day(currentDate)
 
     val currentEntries: List<LedgerEntry>
@@ -104,8 +133,16 @@ class LedgerState(private val context: Context) {
 
     fun isRevealed(entryId: String): Boolean = !privacyMode || revealedEntryId == entryId
 
-    fun displayTitle(entry: LedgerEntry, targetTab: LedgerTab = tab): String {
-        if (targetTab == LedgerTab.SELL && privacyMode && !isRevealed(entry.id)) return "收购方"
+    fun displayTitle(
+        entry: LedgerEntry,
+        targetTab: LedgerTab = tab,
+        displayIndex: Int? = null
+    ): String {
+        if (targetTab == LedgerTab.SELL && privacyMode && !isRevealed(entry.id)) {
+            val number = displayIndex
+                ?: (currentDay.sells.indexOfFirst { it.id == entry.id } + 1).takeIf { it > 0 }
+            return if (number != null) "收购方$number" else "收购方"
+        }
         return entry.title(targetTab)
     }
 
@@ -172,6 +209,10 @@ class LedgerState(private val context: Context) {
     }
 
     fun closeSheet() {
+        val current = sheet
+        if (current is Sheet.ItemForm) {
+            pruneEmptyType(current.entryId, current.typeId)
+        }
         sheet = null
     }
 
@@ -296,6 +337,7 @@ class LedgerState(private val context: Context) {
     fun nextFarmerName(): String = nextFarmerName(currentDay.buys)
 
     fun addEntry(name: String, buyer: String, newBuyer: Boolean = false) {
+        var openTypeFor: String? = null
         if (tab == LedgerTab.BUY) {
             val finalName = name.trim().ifBlank { nextFarmerName(currentDay.buys) }
             val entry = LedgerEntry(
@@ -304,7 +346,8 @@ class LedgerState(private val context: Context) {
                 createdAt = System.currentTimeMillis()
             )
             updateDay { it.copy(buys = it.buys + entry) }
-            showToast("已添加 $finalName")
+            openTypeFor = entry.id
+            showToast("已添加 $finalName，请选择花生类型")
         } else {
             val finalBuyer = buyer.trim()
             if (finalBuyer.isBlank()) {
@@ -322,7 +365,7 @@ class LedgerState(private val context: Context) {
             showToast("已添加 $finalBuyer")
         }
         persist()
-        sheet = null
+        sheet = openTypeFor?.let { Sheet.AddType(it) }
     }
 
     fun renameEntry(entryId: String, newName: String) {
@@ -444,10 +487,7 @@ class LedgerState(private val context: Context) {
         keepOpen: Boolean
     ): Boolean {
         val cleanWeight = round2(weight)
-        if (cleanWeight <= 0.0) {
-            showToast("重量为 0，未记录，请输入重量")
-            return false
-        }
+        if (cleanWeight <= 0.0) return false
         val cleanPrice = round2(price)
         updateEntry(entryId) { entry ->
             entry.copy(
@@ -499,6 +539,7 @@ class LedgerState(private val context: Context) {
                 }
             )
         }
+        pruneEmptyType(entryId, typeId)
         sheet = null
         showToast("已删除")
     }
@@ -598,6 +639,32 @@ class LedgerState(private val context: Context) {
         list[index] = list[target]
         list[target] = item
         updateSettingsList(kind, list)
+    }
+
+    fun moveSettingTo(kind: SettingKind, name: String, targetIndex: Int) {
+        val list = settingsList(kind).toMutableList()
+        val from = list.indexOfFirst { it.name == name }
+        if (from < 0) return
+        val target = targetIndex.coerceIn(0, list.lastIndex)
+        if (from == target) return
+        val item = list.removeAt(from)
+        list.add(target, item)
+        updateSettingsList(kind, list)
+    }
+
+    fun lastUsedType(targetTab: LedgerTab = tab): String? {
+        val entries = data.days.values
+            .flatMap { if (targetTab == LedgerTab.BUY) it.buys else it.sells }
+            .filter { it.types.isNotEmpty() }
+        val last = entries.maxByOrNull { it.createdAt }?.types?.lastOrNull()?.name
+        val active = activeSettingsNames(
+            if (targetTab == LedgerTab.BUY) SettingKind.BUY_TYPES else SettingKind.SELL_TYPES
+        )
+        return when {
+            last == null -> active.firstOrNull()
+            last in active -> last
+            else -> active.firstOrNull()
+        }
     }
 
     fun settingUsage(kind: SettingKind, name: String): Int = when (kind) {
@@ -756,6 +823,43 @@ class LedgerState(private val context: Context) {
                 showToast("已清空")
             }
         )
+    }
+
+    private fun pruneEmptyType(entryId: String, typeId: String) {
+        val entry = findEntry(entryId) ?: return
+        val type = entry.types.firstOrNull { it.id == typeId } ?: return
+        if (type.items.isNotEmpty()) return
+        val day = currentDay
+        val affectedBuy = day.buys.any { it.id == entryId }
+        val affectedSell = day.sells.any { it.id == entryId }
+        if (!affectedBuy && !affectedSell) return
+        updateDay { current ->
+            current.copy(
+                buys = current.buys.map {
+                    if (it.id == entryId) it.copy(types = it.types.filterNot { t -> t.id == typeId }) else it
+                },
+                sells = current.sells.map {
+                    if (it.id == entryId) it.copy(types = it.types.filterNot { t -> t.id == typeId }) else it
+                }
+            )
+        }
+    }
+
+    private fun pruneAllEmptyTypes() {
+        val cleaned = data.days.mapValues { (_, day) ->
+            day.copy(
+                buys = day.buys.map { entry ->
+                    entry.copy(types = entry.types.filter { it.items.isNotEmpty() })
+                },
+                sells = day.sells.map { entry ->
+                    entry.copy(types = entry.types.filter { it.items.isNotEmpty() })
+                }
+            )
+        }
+        if (cleaned != data.days) {
+            data = data.copy(days = cleaned)
+            persist()
+        }
     }
 
     private fun updateDay(transform: (DayData) -> DayData) {

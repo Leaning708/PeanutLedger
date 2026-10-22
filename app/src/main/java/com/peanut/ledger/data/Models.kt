@@ -74,7 +74,9 @@ data class LedgerSettings(
     val buyTypes: List<NamedOption> = defaultBuyTypes(),
     val sellTypes: List<NamedOption> = defaultSellTypes(),
     val buyers: List<NamedOption> = defaultBuyers(),
-    val privacyMode: Boolean = false
+    val privacyMode: Boolean = false,
+    val fontScale: Float = 1.0f,
+    val theme: String = "warm"
 )
 
 data class LedgerData(

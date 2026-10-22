@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,7 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -32,9 +34,14 @@ import com.peanut.ledger.ui.theme.Bg
 import kotlinx.coroutines.delay
 
 @Composable
-fun PeanutLedgerApp() {
-    val context = LocalContext.current.applicationContext
-    val state = remember { LedgerState(context) }
+fun PeanutLedgerApp(state: LedgerState) {
+    val baseDensity = LocalDensity.current
+    val scaledDensity = remember(baseDensity, state.fontScale) {
+        Density(
+            density = baseDensity.density,
+            fontScale = baseDensity.fontScale * state.fontScale
+        )
+    }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -43,13 +50,15 @@ fun PeanutLedgerApp() {
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Bg)) {
-        when (state.screen) {
-            AppScreen.MAIN -> MainScreen(state)
-            AppScreen.SETTINGS -> SettingsScreen(state)
+    CompositionLocalProvider(LocalDensity provides scaledDensity) {
+        Box(Modifier.fillMaxSize().background(Bg)) {
+            when (state.screen) {
+                AppScreen.MAIN -> MainScreen(state)
+                AppScreen.SETTINGS -> SettingsScreen(state)
+            }
+            SheetHost(state)
+            ToastHost(state)
         }
-        SheetHost(state)
-        ToastHost(state)
     }
 }
 

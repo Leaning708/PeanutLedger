@@ -11,7 +11,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val ColorScheme = lightColorScheme(
+@Composable
+private fun ledgerColorScheme() = lightColorScheme(
     primary = Primary,
     onPrimary = CardWhite,
     primaryContainer = GoldBg,
@@ -65,8 +66,11 @@ private val AppTypography = Typography(
 
 @Composable
 fun PeanutLedgerTheme(content: @Composable () -> Unit) {
+    // Reading activeTheme here ensures the Material color scheme updates when the
+    // user switches theme in settings.
+    activeTheme
     MaterialTheme(
-        colorScheme = ColorScheme,
+        colorScheme = ledgerColorScheme(),
         typography = AppTypography,
         shapes = AppShapes,
         content = content

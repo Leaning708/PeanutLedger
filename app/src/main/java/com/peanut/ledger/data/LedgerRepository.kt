@@ -37,6 +37,8 @@ object LedgerRepository {
         .put("sellTypes", sellTypes.optionsToJsonArray())
         .put("buyers", buyers.optionsToJsonArray())
         .put("privacyMode", privacyMode)
+        .put("fontScale", fontScale)
+        .put("theme", theme)
 
     private fun DayData.toJson(): JSONObject = JSONObject()
         .put("remark", remark)
@@ -107,7 +109,9 @@ object LedgerRepository {
             buyTypes = if (obj.has("buyTypes")) obj.optJSONArray("buyTypes").namedOptionList() else fallback.buyTypes,
             sellTypes = if (obj.has("sellTypes")) obj.optJSONArray("sellTypes").namedOptionList() else fallback.sellTypes,
             buyers = if (obj.has("buyers")) obj.optJSONArray("buyers").namedOptionList() else fallback.buyers,
-            privacyMode = obj.optBoolean("privacyMode", false)
+            privacyMode = obj.optBoolean("privacyMode", false),
+            fontScale = obj.optDouble("fontScale", 1.0).toFloat().coerceIn(1.0f, 1.3f),
+            theme = obj.optString("theme", "warm")
         )
     }
 

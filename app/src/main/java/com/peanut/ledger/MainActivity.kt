@@ -6,6 +6,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import com.peanut.ledger.ui.LedgerState
 import com.peanut.ledger.ui.PeanutLedgerApp
 import com.peanut.ledger.ui.theme.PeanutLedgerTheme
 
@@ -17,8 +20,10 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
         )
         setContent {
+            val context = LocalContext.current.applicationContext
+            val state = remember(context) { LedgerState(context) }
             PeanutLedgerTheme {
-                PeanutLedgerApp()
+                PeanutLedgerApp(state)
             }
         }
     }

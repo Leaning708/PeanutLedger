@@ -32,7 +32,8 @@ enum class AppIcon {
     Check,
     Trash,
     Tag,
-    Cash
+    Cash,
+    DragHandle
 }
 
 @Composable
@@ -227,6 +228,12 @@ fun AppIconView(
                     close()
                 }
                 fillCircle(7.7f, 7.7f, 1.15f)
+            }
+
+            AppIcon.DragHandle -> {
+                line(5f, 8f, 19f, 8f)
+                line(5f, 12f, 19f, 12f)
+                line(5f, 16f, 19f, 16f)
             }
 
             AppIcon.Cash -> {

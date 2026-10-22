@@ -1,6 +1,13 @@
 package com.peanut.ledger.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -26,7 +33,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -92,9 +99,10 @@ import java.time.LocalDate
 import java.util.Locale
 import kotlin.math.abs
 
+private data class MainPage(val date: LocalDate, val tab: LedgerTab)
+
 @Composable
 fun MainScreen(state: LedgerState) {
-    val listState = rememberLazyListState()
     val density = LocalDensity.current
     val swipeThreshold = with(density) { 72.dp.toPx() }
     val swipeModifier = Modifier.pointerInput(state.currentDate, state.tab) {
@@ -124,32 +132,64 @@ fun MainScreen(state: LedgerState) {
             onDragCancel = { totalDrag = 0f }
         )
     }
-    LaunchedEffect(state.currentDate, state.tab) {
-        if (listState.firstVisibleItemIndex != 0 || listState.firstVisibleItemScrollOffset != 0) {
-            listState.scrollToItem(0)
-        }
-    }
+    val page = MainPage(state.currentDate, state.tab)
     Box(Modifier.fillMaxSize().background(Bg).then(swipeModifier)) {
         Column(Modifier.fillMaxSize()) {
             AppHeader(state)
-            LazyColumn(
-                state = listState,
+            AnimatedContent(
+                targetState = page,
                 modifier = Modifier.fillMaxWidth().weight(1f),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 132.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                val day = state.currentDay
-                if (day.remark.isNotBlank()) {
-                    item(key = "day-remark") {
-                        DayRemarkCard(day.remark) { state.openSheet(Sheet.DayRemark) }
+                transitionSpec = {
+                    val forward = when {
+                        initialState.tab == LedgerTab.BUY && targetState.tab == LedgerTab.SELL -> true
+                        initialState.tab == LedgerTab.SELL && targetState.tab == LedgerTab.BUY -> false
+                        targetState.date.isAfter(initialState.date) -> true
+                        targetState.date.isBefore(initialState.date) -> false
+                        else -> targetState.tab == LedgerTab.SELL
                     }
+                    val enter = slideInHorizontally(
+                        animationSpec = tween(300, easing = FastOutSlowInEasing)
+                    ) { width -> if (forward) width else -width } + fadeIn(tween(170))
+                    val exit = slideOutHorizontally(
+                        animationSpec = tween(300, easing = FastOutSlowInEasing)
+                    ) { width -> if (forward) -width / 3 else width / 3 } + fadeOut(tween(170))
+                    enter togetherWith exit
+                },
+                label = "mainPage"
+            ) { targetPage ->
+                val listState = rememberLazyListState()
+                LaunchedEffect(targetPage) {
+                    listState.scrollToItem(0)
                 }
-                val entries = state.currentEntries
-                if (entries.isEmpty()) {
-                    item(key = "empty") { EmptyState(state.tab) }
-                } else {
-                    items(entries, key = { it.id }) { entry ->
-                        EntryCard(state, entry)
+                val day = state.day(targetPage.date)
+                val entries = day.entries(targetPage.tab)
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxWidth().fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 14.dp,
+                        bottom = 132.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (day.remark.isNotBlank()) {
+                        item(key = "day-remark") {
+                            DayRemarkCard(day.remark) { state.openSheet(Sheet.DayRemark) }
+                        }
+                    }
+                    if (entries.isEmpty()) {
+                        item(key = "empty") { EmptyState(targetPage.tab) }
+                    } else {
+                        itemsIndexed(entries, key = { _, entry -> entry.id }) { index, entry ->
+                            EntryCard(
+                                state = state,
+                                entry = entry,
+                                tab = targetPage.tab,
+                                privacyIndex = index + 1
+                            )
+                        }
                     }
                 }
             }
@@ -378,10 +418,14 @@ private fun DayRemarkCard(remark: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun EntryCard(state: LedgerState, entry: LedgerEntry) {
-    val tab = state.tab
+private fun EntryCard(
+    state: LedgerState,
+    entry: LedgerEntry,
+    tab: LedgerTab,
+    privacyIndex: Int
+) {
     val isBuy = tab == LedgerTab.BUY
-    val title = state.displayTitle(entry, tab)
+    val title = state.displayTitle(entry, tab, if (tab == LedgerTab.SELL) privacyIndex else null)
     val revealed = state.isRevealed(entry.id)
     val masked = state.privacyMode && !revealed
     val total = entryTotal(entry)
@@ -415,7 +459,12 @@ private fun EntryCard(state: LedgerState, entry: LedgerEntry) {
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                EntryAvatar(title, isBuy)
+                val avatarLabel = when {
+                    !isBuy && state.privacyMode && !revealed -> privacyIndex.toString()
+                    title.startsWith("户") && title.length > 1 -> title.removePrefix("户").take(2)
+                    else -> title.take(1).ifBlank { "?" }
+                }
+                EntryAvatar(avatarLabel, isBuy)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -627,7 +676,7 @@ private fun EntryCard(state: LedgerState, entry: LedgerEntry) {
 }
 
 @Composable
-private fun EntryAvatar(title: String, isBuy: Boolean) {
+private fun EntryAvatar(label: String, isBuy: Boolean) {
     Box(
         modifier = Modifier
             .size(40.dp)
@@ -641,12 +690,8 @@ private fun EntryAvatar(title: String, isBuy: Boolean) {
             ),
         contentAlignment = Alignment.Center
     ) {
-        val initial = when {
-            title.startsWith("户") && title.length > 1 -> title.substring(1).take(2)
-            else -> title.take(1)
-        }.ifBlank { "?" }
         Text(
-            text = initial,
+            text = label.ifBlank { "?" },
             color = CardWhite,
             fontSize = 17.sp,
             fontWeight = FontWeight.Bold
@@ -711,6 +756,11 @@ private fun TypeSection(
                 maxLines = 1,
                 modifier = Modifier.weight(1f)
             )
+            if (type.items.size > 5) {
+                Spacer(Modifier.width(6.dp))
+                CounterTag("${type.items.size} 称")
+            }
+            Spacer(Modifier.width(8.dp))
             Text(
                 text = if (masked) "****" else fmtMoney(typeSubtotal(type)),
                 color = Brown,
