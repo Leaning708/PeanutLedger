@@ -1,6 +1,5 @@
 package com.peanut.ledger.ui
 
-import android.app.DatePickerDialog
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,7 +38,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -123,8 +121,8 @@ fun StatsScreen(state: LedgerState) {
                     }
                 )
             }
-            item { OverviewCard(summary, credit, range) }
-            item { CreditCard(credit, range) }
+            item { OverviewCard(summary, credit) }
+            item { CreditCard(credit) }
             item {
                 StatsChartCard(
                     title = "收支趋势",
@@ -163,7 +161,7 @@ fun StatsScreen(state: LedgerState) {
                     tooltipFormatter = { "¥${fmtNum(it)}/斤" }
                 )
             }
-            item { PartyRankCard(ranking, range) }
+            item { PartyRankCard(ranking) }
             item {
                 Text(
                     text = "统计基于本机记录；金额按实际成交金额计算。",
@@ -354,23 +352,13 @@ private fun DateField(
     modifier: Modifier = Modifier,
     onPick: (LocalDate) -> Unit
 ) {
-    val context = LocalContext.current
+    var showPicker by remember { mutableStateOf(false) }
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(SurfaceSoft)
             .border(1.dp, Line, RoundedCornerShape(10.dp))
-            .clickable {
-                DatePickerDialog(
-                    context,
-                    { _, year, month, day ->
-                        onPick(LocalDate.of(year, month + 1, day))
-                    },
-                    date.year,
-                    date.monthValue - 1,
-                    date.dayOfMonth
-                ).show()
-            }
+            .clickable { showPicker = true }
             .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
         Text(label, color = Muted, fontSize = 9.5.sp)
@@ -383,17 +371,26 @@ private fun DateField(
             maxLines = 1
         )
     }
+    if (showPicker) {
+        LedgerDatePickerDialog(
+            title = if (label.startsWith("开始")) "选择开始日期" else "选择结束日期",
+            initialDate = date,
+            onDismiss = { showPicker = false },
+            onConfirm = {
+                showPicker = false
+                onPick(it)
+            }
+        )
+    }
 }
 
 private fun formatDate(date: LocalDate): String =
     date.format(DateTimeFormatter.ofPattern("yyyy/M/d"))
 
 @Composable
-private fun OverviewCard(summary: StatsSummary, credit: CreditStats, range: StatsRange) {
+private fun OverviewCard(summary: StatsSummary, credit: CreditStats) {
     LedgerCard(contentPadding = PaddingValues(16.dp)) {
         Text("概览", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(3.dp))
-        Text("当前统计周期 · ${range.label}", color = Muted, fontSize = 11.sp)
         Spacer(Modifier.height(12.dp))
         MetricRow(
             Metric("采购支出", fmtMoney(summary.buyAmount), Primary),
@@ -407,7 +404,7 @@ private fun OverviewCard(summary: StatsSummary, credit: CreditStats, range: Stat
                 if (summary.profit >= 0) Primary else Green
             ),
             Metric(
-                "赊账余额",
+                "赊账金额",
                 fmtMoney(credit.outstanding),
                 if (credit.count > 0) Red else Primary
             )
@@ -450,15 +447,11 @@ private fun MetricCell(metric: Metric, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun CreditCard(credit: CreditStats, range: StatsRange) {
+private fun CreditCard(credit: CreditStats) {
     LedgerCard(contentPadding = PaddingValues(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("赊账统计", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.width(8.dp))
-            CounterTag("${credit.count} 笔")
-        }
+        Text("赊账统计", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(3.dp))
-        Text("当前周期未结清销售 · ${range.label}", color = Muted, fontSize = 11.sp)
+        Text("当前周期未结清销售", color = Muted, fontSize = 11.sp)
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.Bottom) {
             Column(Modifier.weight(1f)) {
@@ -487,7 +480,7 @@ private fun CreditCard(credit: CreditStats, range: StatsRange) {
         Spacer(Modifier.height(8.dp))
         Text(
             text = if (credit.count > 0) {
-                "共 ${credit.count} 笔 · 最长账龄 ${credit.oldestDays} 天 · 周期销售 ${fmtMoney(credit.salesTotal)}"
+                "最长账龄 ${credit.oldestDays} 天 · 周期销售 ${fmtMoney(credit.salesTotal)}"
             } else {
                 "当前周期没有未结清销售"
             },
@@ -498,41 +491,62 @@ private fun CreditCard(credit: CreditStats, range: StatsRange) {
         if (credit.topDebtors.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
             Text("欠款排行", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-            Spacer(Modifier.height(5.dp))
+            Spacer(Modifier.height(4.dp))
             credit.topDebtors.forEachIndexed { index, debtor ->
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "${index + 1}",
-                        color = MutedLight,
-                        fontSize = 10.sp,
-                        modifier = Modifier.width(16.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clip(CircleShape)
+                            .background(SurfaceSoft),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "${index + 1}",
+                            color = Primary,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(Modifier.width(9.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
                             text = debtor.name,
                             color = TextSoft,
-                            fontSize = 12.sp,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(Modifier.height(1.dp))
+                        Spacer(Modifier.height(2.dp))
                         Text(
-                            text = "最长账龄 ${debtor.oldestDays} 天 · ${debtor.count} 笔",
+                            text = "最长账龄 ${debtor.oldestDays} 天",
                             color = Muted,
                             fontSize = 9.5.sp,
                             maxLines = 1
                         )
                     }
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = fmtMoney(debtor.amount),
-                        color = Red,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = fmtMoney(debtor.amount),
+                            color = Red,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = "${debtor.count} 笔",
+                            color = Muted,
+                            fontSize = 9.5.sp
+                        )
+                    }
+                }
+                if (index != credit.topDebtors.lastIndex) {
+                    ChevronDivider()
                 }
             }
         }
@@ -603,14 +617,6 @@ private fun StatsChartCard(
             startAtZero = startAtZero,
             axisFormatter = { formatCompactAxis(it) },
             tooltipFormatter = tooltipFormatter
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "长按图表查看详细数值",
-            color = Placeholder,
-            fontSize = 9.sp,
-            textAlign = TextAlign.End,
-            modifier = Modifier.fillMaxWidth()
         )
     }
 }
@@ -711,11 +717,11 @@ private fun TypeFilterItem(text: String, selected: Boolean, onClick: () -> Unit)
 }
 
 @Composable
-private fun PartyRankCard(ranking: List<PartyStat>, range: StatsRange) {
+private fun PartyRankCard(ranking: List<PartyStat>) {
     LedgerCard(contentPadding = PaddingValues(16.dp)) {
         Text("往来排行", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(3.dp))
-        Text("商品收购方 · ${range.label}", color = Muted, fontSize = 11.sp)
+        Text("商品收购方", color = Muted, fontSize = 11.sp)
         Spacer(Modifier.height(12.dp))
         if (ranking.isEmpty()) {
             Text("当前周期暂无商品收购方", color = Placeholder, fontSize = 11.sp)

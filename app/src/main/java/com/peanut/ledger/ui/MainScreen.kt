@@ -1,6 +1,7 @@
 package com.peanut.ledger.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.fadeIn
@@ -8,12 +9,16 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,12 +47,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -944,93 +951,193 @@ private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier =
             entry.types.sumOf { type -> type.items.sumOf { it.weight } }
         }
     )
+    val buyAvg = if (buyWeight > 0.0001) round2(stats.buy / buyWeight) else null
+    val sellAvg = if (sellWeight > 0.0001) round2(stats.sell / sellWeight) else null
+    val creditAmount = round2(
+        day.sells.filter { !it.settled }.sumOf { entryFinal(it) }
+    )
+    var expanded by remember { mutableStateOf(false) }
+    LaunchedEffect(state.currentDate, state.tab) { expanded = false }
+    val density = LocalDensity.current
+    val swipeThreshold = with(density) { 36.dp.toPx() }
+    val toggleModifier = Modifier
+        .pointerInput(Unit) {
+            detectTapGestures(onDoubleTap = { expanded = !expanded })
+        }
+        .pointerInput(Unit) {
+            var totalDrag = 0f
+            detectVerticalDragGestures(
+                onDragStart = { totalDrag = 0f },
+                onVerticalDrag = { change, amount ->
+                    change.consume()
+                    totalDrag += amount
+                },
+                onDragEnd = {
+                    if (totalDrag <= -swipeThreshold) {
+                        expanded = true
+                    } else if (totalDrag >= swipeThreshold) {
+                        expanded = false
+                    }
+                    totalDrag = 0f
+                },
+                onDragCancel = { totalDrag = 0f }
+            )
+        }
+
     Surface(
         modifier = modifier
             .padding(horizontal = 12.dp)
             .navigationBarsPadding()
-            .padding(bottom = 8.dp),
+            .padding(bottom = 8.dp)
+            .animateContentSize(),
         shape = RoundedCornerShape(22.dp),
         color = CardWhite,
         border = BorderStroke(1.dp, CardBorder),
         shadowElevation = 10.dp
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = if (state.currentDate == LocalDate.now()) "今日收支" else "当日收支",
-                    color = Muted,
-                    fontSize = 10.5.sp,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 0.6.sp
-                )
-                Spacer(Modifier.height(1.dp))
-                Text(
-                    text = if (state.privacyMode) "****" else fmtSigned(stats.profit),
-                    color = when {
-                        state.privacyMode -> Placeholder
-                        stats.profit >= 0 -> Primary
-                        else -> Green
-                    },
-                    fontSize = 21.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1
-                )
-                Spacer(Modifier.height(1.dp))
-                Text(
-                    text = if (state.privacyMode) {
-                        "采购 ****  ·  销售 ****"
-                    } else {
-                        "采购 ${fmtMoney(stats.buy)}  ·  销售 ${fmtMoney(stats.sell)}"
-                    },
-                    color = Muted,
-                    fontSize = 10.5.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            Row(verticalAlignment = Alignment.Top) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(toggleModifier)
                 ) {
-                    WeightChip(
-                        label = "采购",
-                        weight = buyWeight,
-                        color = Primary,
-                        masked = state.privacyMode
-                    )
-                    WeightChip(
-                        label = "销售",
-                        weight = sellWeight,
-                        color = AvatarSell,
-                        masked = state.privacyMode
-                    )
-                }
-            }
-            Spacer(Modifier.width(10.dp))
-            Box(
-                modifier = Modifier
-                    .shadow(5.dp, RoundedCornerShape(15.dp))
-                    .clip(RoundedCornerShape(15.dp))
-                    .background(TopGradient)
-                    .clickable { state.openSheet(Sheet.AddEntry) }
-                    .padding(horizontal = 14.dp, vertical = 11.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AppIconView(AppIcon.Plus, tint = CardWhite, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(5.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (state.currentDate == LocalDate.now()) "今日收支" else "当日收支",
+                            color = Muted,
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            letterSpacing = 0.6.sp
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        AppIconView(
+                            icon = AppIcon.ChevronDown,
+                            tint = Muted,
+                            modifier = Modifier
+                                .size(11.dp)
+                                .rotate(if (expanded) 180f else 0f)
+                        )
+                    }
+                    Spacer(Modifier.height(1.dp))
                     Text(
-                        text = if (state.tab == LedgerTab.BUY) "新增农户" else "新增收购",
-                        color = CardWhite,
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        text = if (state.privacyMode) "****" else fmtSigned(stats.profit),
+                        color = when {
+                            state.privacyMode -> Placeholder
+                            stats.profit >= 0 -> Primary
+                            else -> Green
+                        },
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.Bold,
                         maxLines = 1
                     )
+                    if (!expanded) {
+                        Spacer(Modifier.height(1.dp))
+                        Text(
+                            text = if (state.privacyMode) {
+                                "采购 ****  ·  销售 ****"
+                            } else {
+                                "采购 ${fmtMoney(stats.buy)}  ·  销售 ${fmtMoney(stats.sell)}"
+                            },
+                            color = Muted,
+                            fontSize = 10.5.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
+                Box(
+                    modifier = Modifier
+                        .shadow(5.dp, RoundedCornerShape(15.dp))
+                        .clip(RoundedCornerShape(15.dp))
+                        .background(TopGradient)
+                        .clickable { state.openSheet(Sheet.AddEntry) }
+                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AppIconView(AppIcon.Plus, tint = CardWhite, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text(
+                            text = if (state.tab == LedgerTab.BUY) "新增农户" else "新增收购",
+                            color = CardWhite,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(animationSpec = tween(220)) + fadeIn(tween(160)),
+                exit = shrinkVertically(animationSpec = tween(200)) + fadeOut(tween(120))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .then(toggleModifier)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(Modifier.width(38.dp))
+                        Text(
+                            "采购",
+                            color = Primary,
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            "销售",
+                            color = AvatarSell,
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    BottomMetricRow(
+                        label = "金额",
+                        left = if (state.privacyMode) "****" else fmtMoney(stats.buy),
+                        right = if (state.privacyMode) "****" else fmtMoney(stats.sell)
+                    )
+                    BottomMetricRow(
+                        label = "斤数",
+                        left = if (state.privacyMode) "**** 斤" else "${fmtNum(buyWeight)} 斤",
+                        right = if (state.privacyMode) "**** 斤" else "${fmtNum(sellWeight)} 斤"
+                    )
+                    BottomMetricRow(
+                        label = "均价",
+                        left = when {
+                            state.privacyMode -> "****"
+                            buyAvg == null -> "—"
+                            else -> "¥${fmtNum(buyAvg)}/斤"
+                        },
+                        right = when {
+                            state.privacyMode -> "****"
+                            sellAvg == null -> "—"
+                            else -> "¥${fmtNum(sellAvg)}/斤"
+                        }
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    ChevronDivider()
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("赊账金额", color = Muted, fontSize = 10.5.sp)
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            text = if (state.privacyMode) "****" else fmtMoney(creditAmount),
+                            color = if (creditAmount > 0.005 && !state.privacyMode) Red else TextSoft,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }
@@ -1038,26 +1145,34 @@ private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier =
 }
 
 @Composable
-private fun WeightChip(label: String, weight: Double, color: Color, masked: Boolean) {
+private fun BottomMetricRow(label: String, left: String, right: String) {
     Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(5.dp))
-            .background(SurfaceSoft)
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
-            color = if (masked) Placeholder else color,
+            color = Muted,
             fontSize = 9.5.sp,
-            fontWeight = FontWeight.Medium
+            modifier = Modifier.width(38.dp)
         )
-        Spacer(Modifier.width(3.dp))
         Text(
-            text = if (masked) "**** 斤" else "${fmtNum(weight)} 斤",
-            color = if (masked) Placeholder else Muted,
-            fontSize = 9.5.sp,
-            fontWeight = FontWeight.Medium
+            text = left,
+            color = TextMain,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = right,
+            color = TextMain,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
         )
     }
 }

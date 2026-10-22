@@ -3,7 +3,7 @@ package com.peanut.ledger.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -125,9 +125,12 @@ fun LineChart(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(labels, series) {
-                    detectTapGestures(
-                        onLongPress = { offset -> selectAt(offset.x) },
-                        onTap = { selectedIndex = null }
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { offset -> selectAt(offset.x) },
+                        onDrag = { change, _ ->
+                            selectAt(change.position.x)
+                            change.consume()
+                        }
                     )
                 }
         ) {
