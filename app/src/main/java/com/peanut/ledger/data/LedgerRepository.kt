@@ -12,16 +12,20 @@ object LedgerRepository {
     fun load(context: Context): LedgerData {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val raw = prefs.getString(DATA_KEY, null) ?: return seed().also { save(context, it) }
-        return runCatching { parseData(JSONObject(raw)) }
+        return runCatching { decode(JSONObject(raw)) }
             .getOrElse { seed().also { save(context, it) } }
     }
 
     fun save(context: Context, data: LedgerData) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
-            .putString(DATA_KEY, data.toJson().toString())
+            .putString(DATA_KEY, encode(data).toString())
             .apply()
     }
+
+    fun encode(data: LedgerData): JSONObject = data.toJson()
+
+    fun decode(root: JSONObject): LedgerData = parseData(root)
 
     private fun LedgerData.toJson(): JSONObject {
         val root = JSONObject()

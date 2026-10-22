@@ -35,7 +35,8 @@ enum class AppIcon {
     Cash,
     DragHandle,
     Pin,
-    Chart
+    Chart,
+    Backup
 }
 
 @Composable
@@ -236,6 +237,24 @@ fun AppIconView(
                 line(5f, 8f, 19f, 8f)
                 line(5f, 12f, 19f, 12f)
                 line(5f, 16f, 19f, 16f)
+            }
+
+            AppIcon.Backup -> {
+                drawRoundRect(
+                    color = tint,
+                    topLeft = pt(4f, 6.5f),
+                    size = Size(16f * s, 13.5f * s),
+                    cornerRadius = CornerRadius(2.5f * s, 2.5f * s),
+                    style = stroke
+                )
+                line(4f, 10.5f, 20f, 10.5f)
+                line(8.5f, 3.5f, 15.5f, 3.5f)
+                line(12f, 12.5f, 12f, 17.5f)
+                strokePath {
+                    moveTo(dx + 9.5f * s, dy + 15f * s)
+                    lineTo(dx + 12f * s, dy + 17.5f * s)
+                    lineTo(dx + 14.5f * s, dy + 15f * s)
+                }
             }
 
             AppIcon.Chart -> {

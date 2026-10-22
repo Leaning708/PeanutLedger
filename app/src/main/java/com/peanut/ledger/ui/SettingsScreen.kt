@@ -87,6 +87,7 @@ fun SettingsScreen(state: LedgerState) {
             item { DisplayBlock(state) }
             item { SettlementBlock(state) }
             item { LocationBlock(state) }
+            item { BackupBlock(state) }
             item { DataBlock(state) }
             item {
                 Column(
@@ -100,7 +101,7 @@ fun SettingsScreen(state: LedgerState) {
                     )
                     Spacer(Modifier.height(7.dp))
                     Text(
-                        text = "数据仅保存在本机 · 花生账本 v0.1.5",
+                        text = "数据仅保存在本机 · 花生账本 v0.1.6",
                         color = Placeholder,
                         fontSize = 11.sp,
                         textAlign = TextAlign.Center
@@ -574,6 +575,66 @@ private fun LocationBlock(state: LedgerState) {
                 )
             )
         }
+    }
+}
+
+@Composable
+private fun BackupBlock(state: LedgerState) {
+    val backups = remember(state.backupRevision) { state.listBackups() }
+    val last = backups.firstOrNull()
+    val frequency = when (state.backupFrequencyDays) {
+        0 -> "自动备份已关闭"
+        1 -> "每天自动备份"
+        7 -> "每周自动备份"
+        else -> "每 ${state.backupFrequencyDays} 天自动备份"
+    }
+    LedgerCard(contentPadding = PaddingValues(18.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { state.openBackup() }
+                .padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconBadge(
+                icon = AppIcon.Backup,
+                tint = Primary,
+                background = SurfaceSoft,
+                size = 40.dp,
+                iconSize = 19.dp
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "备份与恢复",
+                    color = TextSoft,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "$frequency · 保留 ${state.backupRetentionDays} 天",
+                    color = Muted,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            AppIconView(
+                icon = AppIcon.ChevronRight,
+                tint = Muted,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = last?.let { "最近备份：${it.timeLabel} · ${it.versionLabel}" }
+                ?: "尚无备份，进入后可立即创建",
+            color = Placeholder,
+            fontSize = 10.5.sp,
+            lineHeight = 16.sp
+        )
     }
 }
 

@@ -5,8 +5,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.peanut.ledger.data.BackupInfo
+import com.peanut.ledger.data.BackupManager
+import com.peanut.ledger.data.BackupReason
 import com.peanut.ledger.data.DayData
 import com.peanut.ledger.data.DayStats
+import com.peanut.ledger.data.RestoreCheck
 import com.peanut.ledger.data.EntryLocation
 import com.peanut.ledger.data.LedgerData
 import com.peanut.ledger.data.LedgerEntry
@@ -24,7 +28,7 @@ import com.peanut.ledger.ui.theme.setActiveTheme
 import java.time.LocalDate
 import kotlin.math.abs
 
-enum class AppScreen { MAIN, SETTINGS, STATS }
+enum class AppScreen { MAIN, SETTINGS, STATS, BACKUP }
 
 enum class CalendarMode { DAY, MONTH, YEAR }
 
@@ -91,6 +95,11 @@ class LedgerState(private val context: Context) {
 
     var dataRevision by mutableIntStateOf(0)
         private set
+
+    var backupRevision by mutableIntStateOf(0)
+        private set
+
+    private val backupManager = BackupManager(context)
 
     var calendarMode by mutableStateOf(CalendarMode.DAY)
         private set
@@ -279,6 +288,120 @@ class LedgerState(private val context: Context) {
         screen = AppScreen.MAIN
     }
 
+    fun openBackup() {
+        sheet = null
+        screen = AppScreen.BACKUP
+    }
+
+    fun closeBackup() {
+        screen = AppScreen.SETTINGS
+    }
+
+    val backupFrequencyDays: Int get() = backupManager.frequencyDays
+    val backupRetentionDays: Int get() = backupManager.retentionDays
+    val backupLastSuccessAt: Long get() = backupManager.lastSuccessAt
+
+    fun setBackupFrequency(days: Int) {
+        backupManager.frequencyDays = days
+        backupRevision++
+    }
+
+    fun setBackupRetention(days: Int) {
+        backupManager.retentionDays = days
+        backupRevision++
+    }
+
+    fun listBackups(): List<BackupInfo> = backupManager.listBackups()
+
+    fun createManualBackup() {
+        val info = backupManager.createBackup(data, BackupReason.MANUAL)
+        if (info != null) {
+            backupRevision++
+            showToast("已创建手动备份")
+        } else {
+            showToast("备份失败，请检查存储空间")
+        }
+    }
+
+    /** Safe checkpoint when the APP leaves the foreground or starts a new day. */
+    fun maybeAutoBackup() {
+        if (backupManager.maybeAutoBackup(data) != null) {
+            backupRevision++
+        }
+    }
+
+    fun requestRestore(info: BackupInfo) {
+        when (val check = backupManager.checkRestore(info.file)) {
+            is RestoreCheck.Blocked -> {
+                openSheet(
+                    Sheet.Confirm(
+                        title = "无法还原此备份",
+                        message = check.message,
+                        confirmLabel = "知道了",
+                        destructive = false,
+                        icon = AppIcon.Backup,
+                        onConfirm = {}
+                    )
+                )
+            }
+
+            is RestoreCheck.Invalid -> {
+                openSheet(
+                    Sheet.Confirm(
+                        title = "备份不可用",
+                        message = check.message,
+                        confirmLabel = "知道了",
+                        destructive = false,
+                        icon = AppIcon.Backup,
+                        onConfirm = {}
+                    )
+                )
+            }
+
+            is RestoreCheck.Ready -> {
+                val migratedLine = if (check.migrated) {
+                    "\n这是一份旧版本备份，将按当前版本的数据结构自动兼容读取。"
+                } else {
+                    ""
+                }
+                val message = "备份时间：${check.info.timeLabel}\n" +
+                    "备份数据版本：${check.info.versionLabel}（code ${check.info.appVersionCode}）\n" +
+                    "当前 APP 版本：v${BackupManager.currentAppVersionName()}（code ${BackupManager.currentAppVersionCode()}）\n\n" +
+                    "恢复后，当前所有记账、类型、收购方和设置都会被这份历史数据覆盖，且无法撤销。" +
+                    "恢复前会先自动创建一份当前数据的安全备份。$migratedLine"
+                openSheet(
+                    Sheet.Confirm(
+                        title = "恢复此备份？",
+                        message = message,
+                        confirmLabel = "覆盖并恢复",
+                        destructive = true,
+                        icon = AppIcon.Backup,
+                        onConfirm = { restoreBackup(check.info, check.data) }
+                    )
+                )
+            }
+        }
+    }
+
+    private fun restoreBackup(info: BackupInfo, restored: LedgerData) {
+        val safety = backupManager.createBackup(data, BackupReason.BEFORE_RESTORE)
+        if (safety == null) {
+            showToast("无法创建恢复前安全备份，已取消恢复")
+            return
+        }
+        data = restored
+        setActiveTheme(AppTheme.fromId(data.settings.theme))
+        LedgerRepository.save(context, data)
+        dataRevision++
+        backupRevision++
+        currentDate = LocalDate.now()
+        lastToday = LocalDate.now()
+        tab = LedgerTab.BUY
+        revealedEntryId = null
+        sheet = null
+        showToast("已恢复 ${info.timeLabel} 的备份")
+    }
+
     fun openCalendar() {
         calendarAnchor = currentDate
         calendarMode = CalendarMode.DAY
@@ -317,6 +440,7 @@ class LedgerState(private val context: Context) {
             revealedEntryId = null
             sheet = null
         }
+        maybeAutoBackup()
     }
 
     // ---------------------------------------------------------------- data ops
