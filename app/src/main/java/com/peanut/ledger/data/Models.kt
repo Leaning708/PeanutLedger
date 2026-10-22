@@ -86,8 +86,9 @@ data class LedgerSettings(
     val buyers: List<NamedOption> = defaultBuyers(),
     val privacyMode: Boolean = false,
     val fontScale: Float = 1.0f,
-    val theme: String = "warm",
-    val defaultSettled: Boolean = false
+    val theme: String = "forest",
+    val defaultSettled: Boolean = false,
+    val recordLocation: Boolean = true
 )
 
 data class LedgerData(
@@ -111,7 +112,7 @@ fun round2(value: Double): Double {
 }
 
 fun itemAmount(item: LedgerItem): Double =
-    round2(item.weight * item.price)
+    round2(item.manualAmount ?: (item.weight * item.price))
 
 fun typeSubtotal(type: LedgerType): Double =
     round2(type.items.sumOf { itemAmount(it) })

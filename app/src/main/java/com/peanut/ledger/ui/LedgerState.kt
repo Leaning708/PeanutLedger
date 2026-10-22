@@ -28,8 +28,8 @@ enum class AppScreen { MAIN, SETTINGS }
 enum class CalendarMode { DAY, MONTH, YEAR }
 
 enum class SettingKind(val label: String, val placeholder: String) {
-    BUY_TYPES("采购花生类型", "例如：特大果"),
-    SELL_TYPES("销售花生类型", "例如：统货米"),
+    BUY_TYPES("采购类型", "例如：特大果"),
+    SELL_TYPES("销售类型", "例如：统货米"),
     BUYERS("收购方", "例如：某某油厂")
 }
 
@@ -104,6 +104,8 @@ class LedgerState(private val context: Context) {
 
     val defaultSettled: Boolean get() = data.settings.defaultSettled
 
+    val recordLocation: Boolean get() = data.settings.recordLocation
+
     init {
         setActiveTheme(AppTheme.fromId(data.settings.theme))
         pruneAllEmptyTypes()
@@ -130,6 +132,12 @@ class LedgerState(private val context: Context) {
     fun setDefaultSettled(settled: Boolean) {
         if (data.settings.defaultSettled == settled) return
         data = data.copy(settings = data.settings.copy(defaultSettled = settled))
+        persist()
+    }
+
+    fun setRecordLocation(enabled: Boolean) {
+        if (data.settings.recordLocation == enabled) return
+        data = data.copy(settings = data.settings.copy(recordLocation = enabled))
         persist()
     }
 
@@ -386,7 +394,7 @@ class LedgerState(private val context: Context) {
             )
             updateDay { it.copy(buys = it.buys + entry) }
             openTypeFor = entry.id
-            showToast("已添加 $finalName，请选择花生类型")
+            showToast("已添加 $finalName，请选择采购类型")
         } else {
             val finalBuyer = buyer.trim()
             if (finalBuyer.isBlank()) {
@@ -512,8 +520,17 @@ class LedgerState(private val context: Context) {
         sheet = Sheet.ItemForm(entryId, typeId, null)
     }
 
+    fun revealForAction(entryId: String) {
+        if (privacyMode) revealedEntryId = entryId
+    }
+
+    fun openAddType(entryId: String) {
+        revealForAction(entryId)
+        sheet = Sheet.AddType(entryId)
+    }
+
     fun openItemForm(entryId: String, typeId: String, itemId: String?) {
-        if (!canEditSensitive(entryId)) return
+        revealForAction(entryId)
         sheet = Sheet.ItemForm(entryId, typeId, itemId)
     }
 
@@ -523,6 +540,7 @@ class LedgerState(private val context: Context) {
         itemId: String?,
         weight: Double,
         price: Double,
+        amountOverride: Double?,
         keepOpen: Boolean
     ): Boolean {
         val cleanWeight = round2(weight)
@@ -538,7 +556,7 @@ class LedgerState(private val context: Context) {
                                 item.copy(
                                     weight = cleanWeight,
                                     price = cleanPrice,
-                                    manualAmount = null
+                                    manualAmount = amountOverride
                                 )
                             } else {
                                 item
@@ -549,7 +567,7 @@ class LedgerState(private val context: Context) {
                             id = newId(),
                             weight = cleanWeight,
                             price = cleanPrice,
-                            manualAmount = null
+                            manualAmount = amountOverride
                         )
                     }
                     type.copy(items = items)

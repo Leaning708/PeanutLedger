@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -51,6 +52,7 @@ import com.peanut.ledger.data.NamedOption
 import com.peanut.ledger.ui.theme.AppTheme
 import com.peanut.ledger.ui.theme.Bg
 import com.peanut.ledger.ui.theme.CardWhite
+import com.peanut.ledger.ui.theme.GoldBg
 import com.peanut.ledger.ui.theme.Green
 import com.peanut.ledger.ui.theme.Line
 import com.peanut.ledger.ui.theme.Muted
@@ -82,6 +84,7 @@ fun SettingsScreen(state: LedgerState) {
             item { SettingsBlock(state, SettingKind.BUYERS) }
             item { DisplayBlock(state) }
             item { SettlementBlock(state) }
+            item { LocationBlock(state) }
             item { DataBlock(state) }
             item {
                 Column(
@@ -95,7 +98,7 @@ fun SettingsScreen(state: LedgerState) {
                     )
                     Spacer(Modifier.height(7.dp))
                     Text(
-                        text = "数据仅保存在本机 · 花生账本 v1.4.0",
+                        text = "数据仅保存在本机 · 花生账本 v0.1.0",
                         color = Placeholder,
                         fontSize = 11.sp,
                         textAlign = TextAlign.Center
@@ -138,12 +141,6 @@ private fun SettingsHeader(state: LedgerState) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text("设置", color = CardWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "类型 · 收购方",
-                    color = CardWhite.copy(alpha = 0.7f),
-                    fontSize = 11.5.sp
-                )
             }
             Spacer(Modifier.width(40.dp))
         }
@@ -527,6 +524,40 @@ private fun SettlementOption(
             fontSize = 13.5.sp,
             fontWeight = FontWeight.SemiBold
         )
+    }
+}
+
+@Composable
+private fun LocationBlock(state: LedgerState) {
+    LedgerCard(contentPadding = PaddingValues(18.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconBadge(
+                icon = AppIcon.Pin,
+                tint = Primary,
+                background = GoldBg,
+                size = 34.dp,
+                iconSize = 16.dp
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text("位置记录", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = "新增农户时记录当前位置并标记在条目上；隐私模式下不显示",
+                    color = Muted,
+                    fontSize = 11.5.sp,
+                    lineHeight = 17.sp
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Switch(
+                checked = state.recordLocation,
+                onCheckedChange = { state.setRecordLocation(it) }
+            )
+        }
     }
 }
 

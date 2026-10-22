@@ -522,7 +522,7 @@ private fun EntryCard(
                 }
             }
 
-            entry.location?.let { location ->
+            if (!state.privacyMode) entry.location?.let { location ->
                 Spacer(Modifier.height(8.dp))
                 Row(
                     modifier = Modifier
@@ -556,13 +556,18 @@ private fun EntryCard(
                         .background(SurfaceSoft)
                         .clickable { state.openSheet(Sheet.EntryRemark(entry.id)) }
                         .padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.Top
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    AppIconView(
-                        icon = AppIcon.Note,
-                        tint = IconMuted,
-                        modifier = Modifier.size(13.dp).padding(top = 2.dp)
-                    )
+                    Box(
+                        modifier = Modifier.size(14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AppIconView(
+                            icon = AppIcon.Note,
+                            tint = IconMuted,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
                     Spacer(Modifier.width(7.dp))
                     Text(
                         text = entry.remark,
@@ -581,18 +586,14 @@ private fun EntryCard(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .background(SurfaceSoft)
-                        .clickable {
-                            if (state.canEditSensitive(entry.id)) {
-                                state.openSheet(Sheet.AddType(entry.id))
-                            }
-                        }
+                        .clickable { state.openAddType(entry.id) }
                         .padding(horizontal = 12.dp, vertical = 11.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     AppIconView(AppIcon.Plus, tint = Primary, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(7.dp))
                     Text(
-                        text = "还没有花生类型，添加一个开始记账",
+                        text = "还没有${if (isBuy) "采购类型" else "销售类型"}，添加一个开始记账",
                         color = Brown,
                         fontSize = 12.5.sp
                     )
@@ -607,11 +608,7 @@ private fun EntryCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
-                        .clickable {
-                            if (state.canEditSensitive(entry.id)) {
-                                state.openSheet(Sheet.AddType(entry.id))
-                            }
-                        }
+                        .clickable { state.openAddType(entry.id) }
                         .padding(vertical = 11.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
@@ -619,7 +616,7 @@ private fun EntryCard(
                     AppIconView(AppIcon.Plus, tint = Primary, modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        text = "添加花生类型",
+                        text = "添加${if (isBuy) "采购类型" else "销售类型"}",
                         color = Primary,
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.Medium

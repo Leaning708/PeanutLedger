@@ -31,6 +31,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,8 +53,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -237,7 +241,7 @@ private fun AddEntrySheet(state: LedgerState) {
     }
 }
 
-private enum class LocationStatus { REQUESTING, LOCATING, FOUND, DENIED, UNAVAILABLE }
+private enum class LocationStatus { DISABLED, REQUESTING, LOCATING, FOUND, DENIED, UNAVAILABLE }
 
 @Composable
 private fun AddFarmerSheet(state: LedgerState) {
@@ -247,13 +251,20 @@ private fun AddFarmerSheet(state: LedgerState) {
     val scope = rememberCoroutineScope()
     var locationStatus by remember {
         mutableStateOf(
-            if (LocationHelper.hasPermission(context)) LocationStatus.LOCATING
-            else LocationStatus.REQUESTING
+            when {
+                !state.recordLocation -> LocationStatus.DISABLED
+                LocationHelper.hasPermission(context) -> LocationStatus.LOCATING
+                else -> LocationStatus.REQUESTING
+            }
         )
     }
     var entryLocation by remember { mutableStateOf<EntryLocation?>(null) }
 
     fun fetchLocation() {
+        if (!state.recordLocation) {
+            locationStatus = LocationStatus.DISABLED
+            return
+        }
         locationStatus = LocationStatus.LOCATING
         scope.launch {
             val result = LocationHelper.currentLocation(context)
@@ -265,7 +276,9 @@ private fun AddFarmerSheet(state: LedgerState) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
-        if (result.values.any { it } || LocationHelper.hasPermission(context)) {
+        if (!state.recordLocation) {
+            locationStatus = LocationStatus.DISABLED
+        } else if (result.values.any { it } || LocationHelper.hasPermission(context)) {
             fetchLocation()
         } else {
             locationStatus = LocationStatus.DENIED
@@ -273,6 +286,10 @@ private fun AddFarmerSheet(state: LedgerState) {
     }
 
     fun retryLocation() {
+        if (!state.recordLocation) {
+            locationStatus = LocationStatus.DISABLED
+            return
+        }
         if (LocationHelper.hasPermission(context)) {
             fetchLocation()
         } else {
@@ -288,7 +305,9 @@ private fun AddFarmerSheet(state: LedgerState) {
     LaunchedEffect(Unit) {
         delay(300)
         focusRequester.requestFocus()
-        if (LocationHelper.hasPermission(context)) {
+        if (!state.recordLocation) {
+            locationStatus = LocationStatus.DISABLED
+        } else if (LocationHelper.hasPermission(context)) {
             fetchLocation()
         } else {
             permissionLauncher.launch(
@@ -301,6 +320,7 @@ private fun AddFarmerSheet(state: LedgerState) {
     }
 
     val statusText = when (locationStatus) {
+        LocationStatus.DISABLED -> "位置记录已关闭，可在设置中开启"
         LocationStatus.REQUESTING -> "正在请求定位权限…"
         LocationStatus.LOCATING -> "正在获取当前位置…"
         LocationStatus.FOUND -> entryLocation?.displayText() ?: "已获取当前位置"
@@ -309,7 +329,11 @@ private fun AddFarmerSheet(state: LedgerState) {
     }
 
     Column {
-        SheetTitle("新增农户", "记录农户和当前位置，稍后添加花生类型")
+        SheetTitle(
+            "新增农户",
+            if (state.recordLocation) "记录农户和当前位置，稍后添加采购类型"
+            else "记录农户信息，稍后添加采购类型"
+        )
         FieldLabel("农户名称")
         LedgerTextField(
             value = name,
@@ -373,7 +397,13 @@ private fun AddFarmerSheet(state: LedgerState) {
             GhostButton("取消", { state.closeSheet() }, Modifier.weight(1f))
             PrimaryButton(
                 text = "保存",
-                onClick = { state.addEntry(name, "", location = entryLocation) },
+                onClick = {
+                    state.addEntry(
+                        name,
+                        "",
+                        location = if (state.recordLocation) entryLocation else null
+                    )
+                },
                 modifier = Modifier.weight(1f)
             )
         }
@@ -388,7 +418,7 @@ private fun AddBuyerEntrySheet(state: LedgerState) {
     var menuExpanded by remember { mutableStateOf(false) }
 
     Column {
-        SheetTitle("新增收购记录", "选择收购方，稍后添加花生类型和称重")
+        SheetTitle("新增收购记录", "选择收购方，稍后添加销售类型和称重")
         FieldLabel("收购方")
         BuyerSelector(
             state = state,
@@ -539,9 +569,10 @@ private fun AddTypeSheet(state: LedgerState, entryId: String) {
         mutableStateOf(lastType ?: presets.firstOrNull().orEmpty())
     }
     var customName by remember(entryId, state.tab) { mutableStateOf("") }
+    val typeLabel = if (state.tab == LedgerTab.BUY) "采购类型" else "销售类型"
     Column {
         SheetTitle(
-            text = "选择花生类型",
+            text = "选择$typeLabel",
             subtitle = if (lastType != null && selectedName == lastType) {
                 "已默认选择上次使用的「$lastType」"
             } else {
@@ -700,7 +731,14 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
                 ?: ""
         )
     }
-    val amountText = autoAmount(weightText, priceText)
+    var amountManual by remember(sheet.formKey) { mutableStateOf(item?.manualAmount != null) }
+    var amountText by remember(sheet.formKey) {
+        mutableStateOf(
+            item?.manualAmount?.let { String.format(Locale.US, "%.2f", it) } ?: ""
+        )
+    }
+    val autoAmountText = autoAmount(weightText, priceText)
+    val displayedAmount = if (amountManual) amountText else autoAmountText
 
     fun save(keepOpen: Boolean) {
         val weight = round2(weightText.toDoubleOrNull() ?: 0.0)
@@ -715,6 +753,11 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
             itemId = sheet.itemId,
             weight = weight,
             price = price,
+            amountOverride = if (amountManual) {
+                round2(amountText.toDoubleOrNull() ?: 0.0)
+            } else {
+                null
+            },
             keepOpen = keepOpen
         )
         if (!saved) {
@@ -725,14 +768,18 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
     Column {
         SheetTitle(
             text = if (isEdit) "编辑称" else "新增称",
-            subtitle = "${type.name} · 输入重量和单价，金额自动计算"
+            subtitle = "${type.name} · 输入重量、单价，金额可手动调整"
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
                 FieldLabel("重量（斤）")
                 LedgerTextField(
                     value = weightText,
-                    onValueChange = { weightText = it },
+                    onValueChange = {
+                        weightText = it
+                        amountManual = false
+                        amountText = ""
+                    },
                     modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
                     placeholder = "0",
                     keyboardType = KeyboardType.Decimal
@@ -742,7 +789,11 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
                 FieldLabel("单价（元/斤）")
                 LedgerTextField(
                     value = priceText,
-                    onValueChange = { priceText = it },
+                    onValueChange = {
+                        priceText = it
+                        amountManual = false
+                        amountText = ""
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = "0",
                     keyboardType = KeyboardType.Decimal
@@ -774,12 +825,12 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
-                    .background(SurfaceSoft)
+                    .background(if (amountManual) Primary.copy(alpha = 0.1f) else SurfaceSoft)
                     .padding(horizontal = 7.dp, vertical = 2.dp)
             ) {
                 Text(
-                    text = "自动计算",
-                    color = Muted,
+                    text = if (amountManual) "已修改" else "自动计算",
+                    color = if (amountManual) Primary else Muted,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -797,16 +848,36 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
         ) {
             Text("¥", color = Primary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.width(4.dp))
-            Text(
-                text = amountText,
-                color = TextMain,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
+            BasicTextField(
+                value = displayedAmount,
+                onValueChange = {
+                    amountText = it
+                    amountManual = true
+                },
+                modifier = Modifier.weight(1f),
+                textStyle = TextStyle(
+                    color = TextMain,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                ),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                cursorBrush = SolidColor(Primary),
+                decorationBox = { innerTextField ->
+                    if (displayedAmount.isEmpty()) {
+                        Text(
+                            text = "0.00",
+                            color = Placeholder,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    innerTextField()
+                }
             )
-            Spacer(Modifier.weight(1f))
             Text(
-                text = "不可编辑",
-                color = Placeholder,
+                text = if (amountManual) "手动" else "自动",
+                color = if (amountManual) Primary else Placeholder,
                 fontSize = 10.sp
             )
         }

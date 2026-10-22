@@ -40,6 +40,7 @@ object LedgerRepository {
         .put("fontScale", fontScale)
         .put("theme", theme)
         .put("defaultSettled", defaultSettled)
+        .put("recordLocation", recordLocation)
 
     private fun DayData.toJson(): JSONObject = JSONObject()
         .put("remark", remark)
@@ -118,8 +119,9 @@ object LedgerRepository {
             buyers = if (obj.has("buyers")) obj.optJSONArray("buyers").namedOptionList() else fallback.buyers,
             privacyMode = obj.optBoolean("privacyMode", false),
             fontScale = obj.optDouble("fontScale", 1.0).toFloat().coerceIn(1.0f, 1.3f),
-            theme = obj.optString("theme", "warm"),
-            defaultSettled = obj.optBoolean("defaultSettled", false)
+            theme = obj.optString("theme", "forest"),
+            defaultSettled = obj.optBoolean("defaultSettled", false),
+            recordLocation = obj.optBoolean("recordLocation", true)
         )
     }
 

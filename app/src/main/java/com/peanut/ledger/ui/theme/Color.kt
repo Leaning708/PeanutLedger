@@ -6,18 +6,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 
 enum class AppTheme(val id: String, val label: String) {
+    FOREST("forest", "松绿"),
     WARM("warm", "暖棕"),
     INK("ink", "黛蓝"),
     ROSE("rose", "绛紫"),
     JADE("jade", "青黛"),
-    FOREST("forest", "松绿"),
     GRAPHITE("graphite", "墨灰"),
     OCEAN("ocean", "海盐"),
     SAKURA("sakura", "樱粉"),
     AMBER("amber", "琥珀");
 
     companion object {
-        fun fromId(id: String): AppTheme = entries.firstOrNull { it.id == id } ?: WARM
+        fun fromId(id: String): AppTheme = entries.firstOrNull { it.id == id } ?: FOREST
     }
 }
 
@@ -369,7 +369,7 @@ private val palettes = mapOf(
     AppTheme.AMBER to AmberPalette
 )
 
-private var activeThemeState by mutableStateOf(AppTheme.WARM)
+private var activeThemeState by mutableStateOf(AppTheme.FOREST)
 
 val activeTheme: AppTheme get() = activeThemeState
 

@@ -13,8 +13,10 @@ android {
         applicationId = "com.peanut.ledger"
         minSdk = 26
         targetSdk = 37
-        versionCode = 5
-        versionName = "1.4.0"
+        // 版本号约定见 VERSION.md：未获用户明确要求不改前两位，只递增最后一位；
+        // versionCode 与语义版本分开维护，仅用于安装升级。
+        versionCode = 6
+        versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
