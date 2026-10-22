@@ -252,7 +252,7 @@ private enum class LocationStatus { DISABLED, REQUESTING, LOCATING, FOUND, DENIE
 
 @Composable
 private fun AddFarmerSheet(state: LedgerState) {
-    var name by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf(state.nextSupplierName()) }
     val focusRequester = remember { FocusRequester() }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -346,14 +346,7 @@ private fun AddFarmerSheet(state: LedgerState) {
             value = name,
             onValueChange = { name = it },
             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-            placeholder = "可选，留空自动使用序号"
-        )
-        Spacer(Modifier.height(5.dp))
-        Text(
-            text = "留空保存时，将按当天采购顺序显示为 1、2、3…",
-            color = Muted,
-            fontSize = 10.sp,
-            lineHeight = 15.sp
+            placeholder = "输入供货商名称"
         )
         Spacer(Modifier.height(12.dp))
         Row(

@@ -476,12 +476,14 @@ private fun EntryCard(
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val privacySell = !isBuy && state.privacyMode
-                val autoNamedBuy = isBuy && entry.name.trim().toIntOrNull() != null
-                val showTitle = !privacySell && !autoNamedBuy
+                val supplierNumber = if (isBuy) {
+                    entry.name.trim().removePrefix("供货商").removePrefix("户").toIntOrNull()
+                } else {
+                    null
+                }
                 val avatarLabel = when {
-                    privacySell -> privacyIndex.toString()
-                    autoNamedBuy -> entry.name.trim()
+                    !isBuy && state.privacyMode -> privacyIndex.toString()
+                    supplierNumber != null -> supplierNumber.toString()
                     title.startsWith("户") && title.length > 1 -> title.removePrefix("户").take(2)
                     else -> title.take(1).ifBlank { "?" }
                 }
@@ -499,29 +501,23 @@ private fun EntryCard(
                 EntryAvatar(avatarLabel, isBuy)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    if (showTitle) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = title,
-                                color = TextMain,
-                                fontSize = 16.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                            if (!isBuy) {
-                                Spacer(Modifier.width(6.dp))
-                                SettleTag(entry.settled)
-                            }
-                        }
-                        Spacer(Modifier.height(3.dp))
-                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (!showTitle && !isBuy) {
-                            SettleTag(entry.settled)
+                        Text(
+                            text = title,
+                            color = TextMain,
+                            fontSize = 16.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (!isBuy) {
                             Spacer(Modifier.width(6.dp))
+                            SettleTag(entry.settled)
                         }
+                    }
+                    Spacer(Modifier.height(3.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = metaText,
                             color = Muted,

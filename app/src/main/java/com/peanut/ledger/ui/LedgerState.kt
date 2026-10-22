@@ -22,6 +22,7 @@ import com.peanut.ledger.data.LedgerTab
 import com.peanut.ledger.data.LedgerType
 import com.peanut.ledger.data.NamedOption
 import com.peanut.ledger.data.newId
+import com.peanut.ledger.data.nextSupplierName
 import com.peanut.ledger.data.nextSupplierNumber
 import com.peanut.ledger.data.round2
 import com.peanut.ledger.ui.theme.AppTheme
@@ -172,7 +173,7 @@ class LedgerState(private val context: Context) {
         if (targetTab == LedgerTab.SELL && privacyMode) {
             val number = displayIndex
                 ?: (currentDay.sells.indexOfFirst { it.id == entry.id } + 1).takeIf { it > 0 }
-            return if (number != null) "收$number" else "收购商"
+            return if (number != null) "收购商$number" else "收购商"
         }
         return entry.title(targetTab)
     }
@@ -603,6 +604,8 @@ class LedgerState(private val context: Context) {
         return DayStats(round2(buy), round2(sell))
     }
 
+    fun nextSupplierName(): String = nextSupplierName(currentDay.buys)
+
     fun addEntry(
         name: String,
         buyer: String,
@@ -610,9 +613,7 @@ class LedgerState(private val context: Context) {
     ) {
         var openTypeFor: String? = null
         if (tab == LedgerTab.BUY) {
-            val finalName = name.trim().ifBlank {
-                nextSupplierNumber(currentDay.buys).toString()
-            }
+            val finalName = name.trim().ifBlank { nextSupplierName() }
             val entry = LedgerEntry(
                 id = newId(),
                 name = finalName,
@@ -621,13 +622,7 @@ class LedgerState(private val context: Context) {
             )
             updateDay { it.copy(buys = it.buys + entry) }
             openTypeFor = entry.id
-            showToast(
-                if (finalName.toIntOrNull() != null) {
-                    "已添加序号 $finalName，请选择采购类型"
-                } else {
-                    "已添加 $finalName，请选择采购类型"
-                }
-            )
+            showToast("已添加 $finalName，请选择采购类型")
         } else {
             val finalBuyer = buyer.trim()
             val validBuyer = data.settings.buyers.any { it.active && it.name == finalBuyer }
@@ -665,6 +660,30 @@ class LedgerState(private val context: Context) {
         updateEntry(entryId) { entry -> entry.copy(name = clean) }
         sheet = null
         showToast("已修改")
+    }
+
+    private fun normalizeSupplierNames() {
+        var changed = false
+        val days = data.days.mapValues { (_, day) ->
+            val buys = day.buys.map { entry ->
+                val clean = entry.name.trim()
+                val number = when {
+                    clean.startsWith("户") -> clean.removePrefix("户").toIntOrNull()
+                    else -> clean.toIntOrNull()
+                }
+                if (number != null && clean != "供货商$number") {
+                    changed = true
+                    entry.copy(name = "供货商$number")
+                } else {
+                    entry
+                }
+            }
+            if (buys != day.buys) day.copy(buys = buys) else day
+        }
+        if (changed) {
+            data = data.copy(days = days)
+            persist()
+        }
     }
 
     private fun ensureSaleBuyersBound() {

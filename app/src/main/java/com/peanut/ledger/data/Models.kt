@@ -139,9 +139,12 @@ fun entryFinal(entry: LedgerEntry): Double {
 
 fun entryHasUnsettled(entry: LedgerEntry): Boolean = !entry.settled
 
+fun nextSupplierName(entries: List<LedgerEntry>): String =
+    "供货商${nextSupplierNumber(entries)}"
+
 fun nextSupplierNumber(entries: List<LedgerEntry>): Int {
     val used = entries.mapNotNull { entry ->
-        entry.name.trim().removePrefix("户").toIntOrNull()
+        entry.name.trim().removePrefix("供货商").removePrefix("户").toIntOrNull()
     }.toSet()
     var index = 1
     while (used.contains(index)) index++
