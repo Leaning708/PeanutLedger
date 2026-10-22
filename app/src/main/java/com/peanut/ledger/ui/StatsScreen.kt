@@ -508,7 +508,10 @@ private fun CreditCard(credit: CreditStats) {
                             text = "${index + 1}",
                             color = Primary,
                             fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
+                            lineHeight = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                     Spacer(Modifier.width(9.dp))

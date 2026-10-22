@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.peanut.ledger.ui.theme.AvatarBuy
-import com.peanut.ledger.ui.theme.CardBorder
 import com.peanut.ledger.ui.theme.CardWhite
 import com.peanut.ledger.ui.theme.Line
 import com.peanut.ledger.ui.theme.Muted
@@ -65,10 +64,15 @@ fun LedgerDatePickerDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 26.dp)
-                .shadow(24.dp, RoundedCornerShape(24.dp)),
+                .shadow(
+                    elevation = 28.dp,
+                    shape = RoundedCornerShape(24.dp),
+                    clip = false,
+                    ambientColor = Color.Black.copy(alpha = 0.14f),
+                    spotColor = Color.Black.copy(alpha = 0.22f)
+                ),
             shape = RoundedCornerShape(24.dp),
-            color = CardWhite,
-            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
+            color = CardWhite
         ) {
             Column {
                 Box(

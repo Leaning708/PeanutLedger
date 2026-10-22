@@ -962,7 +962,10 @@ private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier =
     val swipeThreshold = with(density) { 36.dp.toPx() }
     val toggleModifier = Modifier
         .pointerInput(Unit) {
-            detectTapGestures(onDoubleTap = { expanded = !expanded })
+            detectTapGestures(
+                onTap = { expanded = !expanded },
+                onDoubleTap = { expanded = !expanded }
+            )
         }
         .pointerInput(Unit) {
             var totalDrag = 0f
@@ -984,17 +987,27 @@ private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier =
             )
         }
 
-    Surface(
+    Box(
         modifier = modifier
             .padding(horizontal = 12.dp)
             .navigationBarsPadding()
-            .padding(bottom = 8.dp)
-            .animateContentSize(),
-        shape = RoundedCornerShape(22.dp),
-        color = CardWhite,
-        border = BorderStroke(1.dp, CardBorder),
-        shadowElevation = 10.dp
+            .padding(bottom = 16.dp)
+            .animateContentSize()
+            .shadow(
+                elevation = 14.dp,
+                shape = RoundedCornerShape(22.dp),
+                clip = false,
+                ambientColor = Color.Black.copy(alpha = 0.10f),
+                spotColor = Color.Black.copy(alpha = 0.16f)
+            )
     ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(22.dp),
+            color = CardWhite,
+            border = BorderStroke(1.dp, CardBorder),
+            shadowElevation = 0.dp
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1104,8 +1117,8 @@ private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier =
                     Spacer(Modifier.height(4.dp))
                     BottomMetricRow(
                         label = "金额",
-                        left = if (state.privacyMode) "****" else fmtMoney(stats.buy),
-                        right = if (state.privacyMode) "****" else fmtMoney(stats.sell)
+                        left = if (state.privacyMode) "**** 元" else fmtYuan(stats.buy),
+                        right = if (state.privacyMode) "**** 元" else fmtYuan(stats.sell)
                     )
                     BottomMetricRow(
                         label = "斤数",
@@ -1115,14 +1128,14 @@ private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier =
                     BottomMetricRow(
                         label = "均价",
                         left = when {
-                            state.privacyMode -> "****"
+                            state.privacyMode -> "**** 元/斤"
                             buyAvg == null -> "—"
-                            else -> "¥${fmtNum(buyAvg)}/斤"
+                            else -> fmtAvgYuan(buyAvg)
                         },
                         right = when {
-                            state.privacyMode -> "****"
+                            state.privacyMode -> "**** 元/斤"
                             sellAvg == null -> "—"
-                            else -> "¥${fmtNum(sellAvg)}/斤"
+                            else -> fmtAvgYuan(sellAvg)
                         }
                     )
                     Spacer(Modifier.height(6.dp))
@@ -1132,7 +1145,7 @@ private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier =
                         Text("赊账金额", color = Muted, fontSize = 10.5.sp)
                         Spacer(Modifier.weight(1f))
                         Text(
-                            text = if (state.privacyMode) "****" else fmtMoney(creditAmount),
+                            text = if (state.privacyMode) "**** 元" else fmtYuan(creditAmount),
                             color = if (creditAmount > 0.005 && !state.privacyMode) Red else TextSoft,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold
@@ -1141,8 +1154,15 @@ private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier =
                 }
             }
         }
+        }
     }
 }
+
+private fun fmtYuan(value: Double): String =
+    fmtMoney(value).removePrefix("¥") + " 元"
+
+private fun fmtAvgYuan(value: Double): String =
+    String.format(Locale.US, "%.2f 元/斤", value)
 
 @Composable
 private fun BottomMetricRow(label: String, left: String, right: String) {
