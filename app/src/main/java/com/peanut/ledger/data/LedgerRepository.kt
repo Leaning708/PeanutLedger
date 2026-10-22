@@ -33,9 +33,9 @@ object LedgerRepository {
     }
 
     private fun LedgerSettings.toJson(): JSONObject = JSONObject()
-        .put("buyTypes", buyTypes.stringsToJsonArray())
-        .put("sellTypes", sellTypes.stringsToJsonArray())
-        .put("buyers", buyers.stringsToJsonArray())
+        .put("buyTypes", buyTypes.optionsToJsonArray())
+        .put("sellTypes", sellTypes.optionsToJsonArray())
+        .put("buyers", buyers.optionsToJsonArray())
         .put("privacyMode", privacyMode)
 
     private fun DayData.toJson(): JSONObject = JSONObject()
@@ -65,8 +65,14 @@ object LedgerRepository {
         .put("price", price)
         .put("manualAmount", manualAmount ?: JSONObject.NULL)
 
-    private fun List<String>.stringsToJsonArray(): JSONArray = JSONArray().also { array ->
-        forEach { array.put(it) }
+    private fun List<NamedOption>.optionsToJsonArray(): JSONArray = JSONArray().also { array ->
+        forEach { option ->
+            array.put(
+                JSONObject()
+                    .put("name", option.name)
+                    .put("active", option.active)
+            )
+        }
     }
 
     private fun List<LedgerEntry>.entriesToJsonArray(): JSONArray = JSONArray().also { array ->
@@ -98,9 +104,9 @@ object LedgerRepository {
         val fallback = LedgerSettings()
         if (obj == null) return fallback
         return LedgerSettings(
-            buyTypes = if (obj.has("buyTypes")) obj.optJSONArray("buyTypes").stringList() else fallback.buyTypes,
-            sellTypes = if (obj.has("sellTypes")) obj.optJSONArray("sellTypes").stringList() else fallback.sellTypes,
-            buyers = if (obj.has("buyers")) obj.optJSONArray("buyers").stringList() else fallback.buyers,
+            buyTypes = if (obj.has("buyTypes")) obj.optJSONArray("buyTypes").namedOptionList() else fallback.buyTypes,
+            sellTypes = if (obj.has("sellTypes")) obj.optJSONArray("sellTypes").namedOptionList() else fallback.sellTypes,
+            buyers = if (obj.has("buyers")) obj.optJSONArray("buyers").namedOptionList() else fallback.buyers,
             privacyMode = obj.optBoolean("privacyMode", false)
         )
     }
@@ -144,11 +150,21 @@ object LedgerRepository {
         }
     )
 
-    private fun JSONArray?.stringList(): List<String> {
+    private fun JSONArray?.namedOptionList(): List<NamedOption> {
         if (this == null) return emptyList()
-        return buildList {
-            for (i in 0 until length()) add(optString(i, ""))
+        val options = mutableListOf<NamedOption>()
+        for (i in 0 until length()) {
+            when (val value = opt(i)) {
+                is String -> if (value.isNotBlank()) options += NamedOption(value, true)
+                is JSONObject -> {
+                    val name = value.optString("name", "")
+                    if (name.isNotBlank()) {
+                        options += NamedOption(name, value.optBoolean("active", true))
+                    }
+                }
+            }
         }
+        return options.distinctBy { it.name }
     }
 
     private fun <T> JSONArray?.entryList(parse: (JSONObject) -> T): List<T> {

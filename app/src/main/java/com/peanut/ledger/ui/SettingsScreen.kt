@@ -7,7 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,19 +30,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.peanut.ledger.data.NamedOption
 import com.peanut.ledger.ui.theme.Bg
 import com.peanut.ledger.ui.theme.CardWhite
+import com.peanut.ledger.ui.theme.Green
 import com.peanut.ledger.ui.theme.Line
 import com.peanut.ledger.ui.theme.Muted
 import com.peanut.ledger.ui.theme.Placeholder
 import com.peanut.ledger.ui.theme.Primary
-import com.peanut.ledger.ui.theme.PrimaryDark
 import com.peanut.ledger.ui.theme.Red
 import com.peanut.ledger.ui.theme.RedBg
 import com.peanut.ledger.ui.theme.SurfaceSoft
@@ -136,9 +140,9 @@ private fun SettingsBlock(state: LedgerState, kind: SettingKind) {
     val list = state.settingsList(kind)
     var input by remember(kind) { mutableStateOf("") }
     val description = when (kind) {
-        SettingKind.BUY_TYPES -> "采购时快速选择的花生类型"
-        SettingKind.SELL_TYPES -> "销售时快速选择的花生类型"
-        SettingKind.BUYERS -> "销售记录中可选的收购方"
+        SettingKind.BUY_TYPES -> "采购时快速选择的花生类型，可排序、重命名或设为失效"
+        SettingKind.SELL_TYPES -> "销售时快速选择的花生类型，可排序、重命名或设为失效"
+        SettingKind.BUYERS -> "销售记录中可选的收购方，可排序、重命名或设为失效"
     }
     LedgerCard(contentPadding = PaddingValues(18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -152,8 +156,8 @@ private fun SettingsBlock(state: LedgerState, kind: SettingKind) {
             CounterTag(list.size.toString())
         }
         Spacer(Modifier.height(3.dp))
-        Text(description, color = Muted, fontSize = 11.5.sp)
-        Spacer(Modifier.height(14.dp))
+        Text(description, color = Muted, fontSize = 11.5.sp, lineHeight = 17.sp)
+        Spacer(Modifier.height(12.dp))
         if (list.isEmpty()) {
             Box(
                 modifier = Modifier
@@ -165,13 +169,16 @@ private fun SettingsBlock(state: LedgerState, kind: SettingKind) {
                 Text("暂无，可在下方添加", color = Placeholder, fontSize = 12.sp)
             }
         } else {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                list.forEach { name ->
-                    SettingChip(name) { state.deleteSetting(kind, name) }
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                list.forEachIndexed { index, option ->
+                    SettingOptionRow(
+                        option = option,
+                        canMoveUp = index > 0,
+                        canMoveDown = index < list.lastIndex,
+                        onMoveUp = { state.moveSetting(kind, option.name, -1) },
+                        onMoveDown = { state.moveSetting(kind, option.name, 1) },
+                        onActions = { state.openSheet(Sheet.SettingActions(kind, option.name)) }
+                    )
                 }
             }
         }
@@ -194,6 +201,7 @@ private fun SettingsBlock(state: LedgerState, kind: SettingKind) {
                     .shadow(3.dp, RoundedCornerShape(13.dp))
                     .clip(RoundedCornerShape(13.dp))
                     .background(TopGradient)
+                    .semantics { contentDescription = "添加${kind.label}" }
                     .clickable {
                         state.addSetting(kind, input)
                         input = ""
@@ -207,26 +215,106 @@ private fun SettingsBlock(state: LedgerState, kind: SettingKind) {
 }
 
 @Composable
-private fun SettingChip(name: String, onDelete: () -> Unit) {
+private fun SettingOptionRow(
+    option: NamedOption,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onActions: () -> Unit
+) {
+    val shape = RoundedCornerShape(12.dp)
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(SurfaceSoft)
-            .border(1.dp, Line, RoundedCornerShape(10.dp))
-            .padding(start = 11.dp, end = 3.dp, top = 4.dp, bottom = 4.dp),
+            .fillMaxWidth()
+            .clip(shape)
+            .background(if (option.active) SurfaceSoft else SurfaceSoft.copy(alpha = 0.5f))
+            .border(1.dp, Line, shape)
+            .clickable(onClick = onActions)
+            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(name, color = TextMain, fontSize = 13.sp)
-        Spacer(Modifier.width(2.dp))
+        Box(
+            Modifier
+                .size(5.dp)
+                .clip(CircleShape)
+                .background(if (option.active) Green else Placeholder.copy(alpha = 0.5f))
+        )
+        Spacer(Modifier.width(9.dp))
+        Text(
+            text = option.name,
+            color = if (option.active) TextMain else Placeholder,
+            fontSize = 13.5.sp,
+            fontWeight = if (option.active) FontWeight.Medium else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        if (!option.active) {
+            Spacer(Modifier.width(7.dp))
+            InactiveTag()
+        }
+        Spacer(Modifier.width(4.dp))
+        ReorderButton(
+            icon = AppIcon.ChevronDown,
+            description = "上移",
+            enabled = canMoveUp,
+            rotate = 180f,
+            onClick = onMoveUp
+        )
+        ReorderButton(
+            icon = AppIcon.ChevronDown,
+            description = "下移",
+            enabled = canMoveDown,
+            rotate = 0f,
+            onClick = onMoveDown
+        )
         Box(
             modifier = Modifier
-                .size(24.dp)
+                .size(30.dp)
                 .clip(CircleShape)
-                .clickable(onClick = onDelete),
+                .semantics { contentDescription = "更多操作" }
+                .clickable(onClick = onActions),
             contentAlignment = Alignment.Center
         ) {
-            AppIconView(AppIcon.Close, tint = Muted, modifier = Modifier.size(11.dp))
+            AppIconView(AppIcon.More, tint = Muted, modifier = Modifier.size(15.dp))
         }
+    }
+}
+
+@Composable
+private fun ReorderButton(
+    icon: AppIcon,
+    description: String,
+    enabled: Boolean,
+    rotate: Float,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(30.dp)
+            .clip(CircleShape)
+            .semantics { contentDescription = description }
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        AppIconView(
+            icon = icon,
+            tint = if (enabled) Muted else Placeholder.copy(alpha = 0.45f),
+            modifier = Modifier.size(14.dp).rotate(rotate)
+        )
+    }
+}
+
+@Composable
+private fun InactiveTag() {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(5.dp))
+            .background(Color(0xFFF1EDE6))
+            .padding(horizontal = 5.dp, vertical = 1.dp)
+    ) {
+        Text("已失效", color = Muted, fontSize = 9.5.sp, fontWeight = FontWeight.Medium)
     }
 }
 

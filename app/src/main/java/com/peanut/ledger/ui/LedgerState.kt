@@ -13,6 +13,7 @@ import com.peanut.ledger.data.LedgerRepository
 import com.peanut.ledger.data.LedgerSettings
 import com.peanut.ledger.data.LedgerTab
 import com.peanut.ledger.data.LedgerType
+import com.peanut.ledger.data.NamedOption
 import com.peanut.ledger.data.newId
 import com.peanut.ledger.data.nextFarmerName
 import com.peanut.ledger.data.round2
@@ -47,11 +48,14 @@ sealed interface Sheet {
     data class RenameEntry(val entryId: String) : Sheet
     data class EntryRemark(val entryId: String) : Sheet
     data class FinalAmount(val entryId: String) : Sheet
+    data class SettingActions(val kind: SettingKind, val name: String) : Sheet
+    data class RenameSetting(val kind: SettingKind, val oldName: String) : Sheet
     data class Confirm(
         val title: String,
         val message: String = "",
         val confirmLabel: String = "确定",
         val destructive: Boolean = true,
+        val icon: AppIcon? = null,
         val onConfirm: () -> Unit
     ) : Sheet
 }
@@ -100,6 +104,11 @@ class LedgerState(private val context: Context) {
 
     fun isRevealed(entryId: String): Boolean = !privacyMode || revealedEntryId == entryId
 
+    fun displayTitle(entry: LedgerEntry, targetTab: LedgerTab = tab): String {
+        if (targetTab == LedgerTab.SELL && privacyMode && !isRevealed(entry.id)) return "收购方"
+        return entry.title(targetTab)
+    }
+
     fun toggleTab(next: LedgerTab) {
         if (tab == next) return
         tab = next
@@ -146,7 +155,7 @@ class LedgerState(private val context: Context) {
 
     fun canEditSensitive(entryId: String): Boolean {
         if (!privacyMode || revealedEntryId == entryId) return true
-        showToast("请先双击该户卡片，显示后再操作")
+        showToast("请先双击或长按卡片显示后再操作")
         return false
     }
 
@@ -302,9 +311,7 @@ class LedgerState(private val context: Context) {
                 showToast("请选择收购方")
                 return
             }
-            if (newBuyer && !data.settings.buyers.contains(finalBuyer)) {
-                data = data.copy(settings = data.settings.copy(buyers = data.settings.buyers + finalBuyer))
-            }
+            if (newBuyer) ensureBuyerOption(finalBuyer)
             val entry = LedgerEntry(
                 id = newId(),
                 buyer = finalBuyer,
@@ -343,7 +350,7 @@ class LedgerState(private val context: Context) {
 
     fun deleteEntry(entryId: String) {
         val entry = findEntry(entryId) ?: return
-        val label = entry.title(tab)
+        val label = displayTitle(entry, tab)
         openSheet(
             Sheet.Confirm(
                 title = "删除记录",
@@ -434,16 +441,14 @@ class LedgerState(private val context: Context) {
         itemId: String?,
         weight: Double,
         price: Double,
-        amount: Double?,
         keepOpen: Boolean
-    ) {
-        val auto = round2(weight * price)
-        val finalAmount = amount ?: auto
-        if (weight <= 0.0 && price <= 0.0 && finalAmount <= 0.0) {
-            showToast("请填写重量和单价")
-            return
+    ): Boolean {
+        val cleanWeight = round2(weight)
+        if (cleanWeight <= 0.0) {
+            showToast("重量为 0，未记录，请输入重量")
+            return false
         }
-        val manualAmount = if (abs(finalAmount - auto) < 0.005) null else round2(finalAmount)
+        val cleanPrice = round2(price)
         updateEntry(entryId) { entry ->
             entry.copy(
                 types = entry.types.map { type ->
@@ -451,7 +456,11 @@ class LedgerState(private val context: Context) {
                     val items = if (itemId != null) {
                         type.items.map { item ->
                             if (item.id == itemId) {
-                                item.copy(weight = weight, price = price, manualAmount = manualAmount)
+                                item.copy(
+                                    weight = cleanWeight,
+                                    price = cleanPrice,
+                                    manualAmount = null
+                                )
                             } else {
                                 item
                             }
@@ -459,9 +468,9 @@ class LedgerState(private val context: Context) {
                     } else {
                         type.items + LedgerItem(
                             id = newId(),
-                            weight = weight,
-                            price = price,
-                            manualAmount = manualAmount
+                            weight = cleanWeight,
+                            price = cleanPrice,
+                            manualAmount = null
                         )
                     }
                     type.copy(items = items)
@@ -475,6 +484,7 @@ class LedgerState(private val context: Context) {
             sheet = null
             showToast("已保存")
         }
+        return true
     }
 
     fun deleteItem(entryId: String, typeId: String, itemId: String) {
@@ -513,22 +523,35 @@ class LedgerState(private val context: Context) {
     }
 
     fun addPreset(name: String) {
-        val key = if (tab == LedgerTab.BUY) {
-            if (data.settings.buyTypes.contains(name)) return
-            data.settings.buyTypes + name
+        val clean = name.trim()
+        if (clean.isBlank()) return
+        val isBuy = tab == LedgerTab.BUY
+        val list = if (isBuy) data.settings.buyTypes else data.settings.sellTypes
+        val index = list.indexOfFirst { it.name == clean }
+        val next = if (index >= 0) {
+            if (list[index].active) return
+            list.toMutableList().also { it[index] = it[index].copy(active = true) }
         } else {
-            if (data.settings.sellTypes.contains(name)) return
-            data.settings.sellTypes + name
+            list + NamedOption(clean)
         }
         data = data.copy(
-            settings = if (tab == LedgerTab.BUY) {
-                data.settings.copy(buyTypes = key)
+            settings = if (isBuy) {
+                data.settings.copy(buyTypes = next)
             } else {
-                data.settings.copy(sellTypes = key)
+                data.settings.copy(sellTypes = next)
             }
         )
         persist()
     }
+
+    fun activeSettingsNames(kind: SettingKind): List<String> =
+        settingsList(kind).filter { it.active }.map { it.name }
+
+    fun activeBuyTypes(): List<String> = activeSettingsNames(SettingKind.BUY_TYPES)
+
+    fun activeSellTypes(): List<String> = activeSettingsNames(SettingKind.SELL_TYPES)
+
+    fun activeBuyers(): List<String> = activeSettingsNames(SettingKind.BUYERS)
 
     fun addSetting(kind: SettingKind, name: String) {
         val clean = name.trim()
@@ -537,27 +560,129 @@ class LedgerState(private val context: Context) {
             return
         }
         val list = settingsList(kind)
-        if (list.contains(clean)) {
-            showToast("已存在")
+        val index = list.indexOfFirst { it.name == clean }
+        if (index >= 0) {
+            if (list[index].active) {
+                showToast("已存在")
+                return
+            }
+            updateSettingsList(
+                kind,
+                list.toMutableList().also { it[index] = it[index].copy(active = true) }
+            )
+            showToast("已恢复使用")
             return
         }
-        updateSettingsList(kind, list + clean)
+        updateSettingsList(kind, list + NamedOption(clean))
         showToast("已添加")
     }
 
-    fun deleteSetting(kind: SettingKind, name: String) {
+    fun setSettingActive(kind: SettingKind, name: String, active: Boolean) {
         val list = settingsList(kind)
-        updateSettingsList(kind, list.filterNot { it == name })
-        showToast("已删除")
+        val index = list.indexOfFirst { it.name == name }
+        if (index < 0) return
+        if (list[index].active == active) return
+        updateSettingsList(
+            kind,
+            list.toMutableList().also { it[index] = it[index].copy(active = active) }
+        )
+        showToast(if (active) "已恢复使用" else "已设为失效")
     }
 
-    fun settingsList(kind: SettingKind): List<String> = when (kind) {
+    fun moveSetting(kind: SettingKind, name: String, direction: Int) {
+        val list = settingsList(kind).toMutableList()
+        val index = list.indexOfFirst { it.name == name }
+        val target = index + direction
+        if (index < 0 || target !in list.indices) return
+        val item = list[index]
+        list[index] = list[target]
+        list[target] = item
+        updateSettingsList(kind, list)
+    }
+
+    fun settingUsage(kind: SettingKind, name: String): Int = when (kind) {
+        SettingKind.BUY_TYPES -> data.days.values.sumOf { day ->
+            day.buys.count { entry -> entry.types.any { it.name == name } }
+        }
+        SettingKind.SELL_TYPES -> data.days.values.sumOf { day ->
+            day.sells.count { entry -> entry.types.any { it.name == name } }
+        }
+        SettingKind.BUYERS -> data.days.values.sumOf { day ->
+            day.sells.count { it.buyer == name }
+        }
+    }
+
+    fun requestDeleteSetting(kind: SettingKind, name: String) {
+        val usage = settingUsage(kind, name)
+        if (usage > 0) {
+            openSheet(
+                Sheet.Confirm(
+                    title = "无法删除",
+                    message = "「$name」已被 $usage 条记录使用。可以将其设为失效，失效后记账时将不再显示。",
+                    confirmLabel = "设为失效",
+                    destructive = false,
+                    icon = AppIcon.EyeOff
+                ) {
+                    setSettingActive(kind, name, false)
+                    sheet = null
+                }
+            )
+        } else {
+            openSheet(
+                Sheet.Confirm(
+                    title = "删除${kind.label}",
+                    message = "确定删除「$name」吗？",
+                    confirmLabel = "删除"
+                ) {
+                    updateSettingsList(kind, settingsList(kind).filterNot { it.name == name })
+                    sheet = null
+                    showToast("已删除")
+                }
+            )
+        }
+    }
+
+    fun renameSetting(kind: SettingKind, oldName: String, newName: String): Boolean {
+        val clean = newName.trim()
+        if (clean.isBlank()) {
+            showToast("请输入名称")
+            return false
+        }
+        if (clean == oldName) {
+            sheet = null
+            return true
+        }
+        val list = settingsList(kind)
+        if (list.any { it.name == clean }) {
+            showToast("名称已存在")
+            return false
+        }
+        val index = list.indexOfFirst { it.name == oldName }
+        if (index < 0) {
+            showToast("选项不存在")
+            return false
+        }
+        val usage = settingUsage(kind, oldName)
+        updateSettingsList(
+            kind,
+            list.toMutableList().also { it[index] = it[index].copy(name = clean) }
+        )
+        data = data.copy(
+            days = data.days.mapValues { (_, day) -> renameInDay(kind, day, oldName, clean) }
+        )
+        persist()
+        sheet = null
+        showToast(if (usage > 0) "已重命名，并同步更新 $usage 条记录" else "已重命名")
+        return true
+    }
+
+    fun settingsList(kind: SettingKind): List<NamedOption> = when (kind) {
         SettingKind.BUY_TYPES -> data.settings.buyTypes
         SettingKind.SELL_TYPES -> data.settings.sellTypes
         SettingKind.BUYERS -> data.settings.buyers
     }
 
-    private fun updateSettingsList(kind: SettingKind, list: List<String>) {
+    private fun updateSettingsList(kind: SettingKind, list: List<NamedOption>) {
         val next = when (kind) {
             SettingKind.BUY_TYPES -> data.settings.copy(buyTypes = list)
             SettingKind.SELL_TYPES -> data.settings.copy(sellTypes = list)
@@ -565,6 +690,56 @@ class LedgerState(private val context: Context) {
         }
         data = data.copy(settings = next)
         persist()
+    }
+
+    private fun ensureBuyerOption(name: String) {
+        val list = data.settings.buyers
+        val index = list.indexOfFirst { it.name == name }
+        val next = if (index >= 0) {
+            if (list[index].active) return
+            list.toMutableList().also { it[index] = it[index].copy(active = true) }
+        } else {
+            list + NamedOption(name)
+        }
+        data = data.copy(settings = data.settings.copy(buyers = next))
+    }
+
+    private fun renameInDay(kind: SettingKind, day: DayData, oldName: String, newName: String): DayData =
+        when (kind) {
+            SettingKind.BUY_TYPES -> day.copy(
+                buys = day.buys.map {
+                    it.copy(types = renameTypes(it.types, oldName, newName))
+                }
+            )
+            SettingKind.SELL_TYPES -> day.copy(
+                sells = day.sells.map {
+                    it.copy(types = renameTypes(it.types, oldName, newName))
+                }
+            )
+            SettingKind.BUYERS -> day.copy(
+                sells = day.sells.map {
+                    if (it.buyer == oldName) it.copy(buyer = newName) else it
+                }
+            )
+        }
+
+    private fun renameTypes(
+        types: List<LedgerType>,
+        oldName: String,
+        newName: String
+    ): List<LedgerType> {
+        if (types.none { it.name == oldName }) return types
+        val renamed = types.map { if (it.name == oldName) it.copy(name = newName) else it }
+        val merged = mutableListOf<LedgerType>()
+        renamed.forEach { type ->
+            val existing = merged.indexOfFirst { it.name == type.name }
+            if (existing >= 0) {
+                merged[existing] = merged[existing].copy(items = merged[existing].items + type.items)
+            } else {
+                merged.add(type)
+            }
+        }
+        return merged
     }
 
     fun clearAllData() {

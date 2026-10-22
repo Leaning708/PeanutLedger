@@ -8,6 +8,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -64,7 +65,7 @@ private fun ToastHost(state: LedgerState) {
         }
     }
     Box(
-        modifier = Modifier.fillMaxSize().zIndex(100f),
+        modifier = Modifier.fillMaxSize().zIndex(100f).imePadding(),
         contentAlignment = Alignment.BottomCenter
     ) {
         AnimatedVisibility(

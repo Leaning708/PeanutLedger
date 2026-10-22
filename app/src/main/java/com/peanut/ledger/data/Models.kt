@@ -54,10 +54,26 @@ data class DayData(
     fun isEmpty(): Boolean = buys.isEmpty() && sells.isEmpty() && remark.isBlank()
 }
 
+data class NamedOption(
+    val name: String,
+    val active: Boolean = true
+)
+
+fun defaultBuyTypes(): List<NamedOption> =
+    listOf("花生米", "花生果", "油料米", "白沙米", "海花米", "种子米")
+        .map { NamedOption(it) }
+
+fun defaultSellTypes(): List<NamedOption> =
+    listOf("商品米", "商品果", "油料米", "下料米", "花生米")
+        .map { NamedOption(it) }
+
+fun defaultBuyers(): List<NamedOption> =
+    listOf("鲁南油厂").map { NamedOption(it) }
+
 data class LedgerSettings(
-    val buyTypes: List<String> = listOf("花生米", "花生果", "油料米", "白沙米", "海花米", "种子米"),
-    val sellTypes: List<String> = listOf("商品米", "商品果", "油料米", "下料米", "花生米"),
-    val buyers: List<String> = listOf("鲁南油厂"),
+    val buyTypes: List<NamedOption> = defaultBuyTypes(),
+    val sellTypes: List<NamedOption> = defaultSellTypes(),
+    val buyers: List<NamedOption> = defaultBuyers(),
     val privacyMode: Boolean = false
 )
 
@@ -82,7 +98,7 @@ fun round2(value: Double): Double {
 }
 
 fun itemAmount(item: LedgerItem): Double =
-    round2(item.manualAmount ?: (item.weight * item.price))
+    round2(item.weight * item.price)
 
 fun typeSubtotal(type: LedgerType): Double =
     round2(type.items.sumOf { itemAmount(it) })

@@ -6,6 +6,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +44,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -93,12 +95,41 @@ import kotlin.math.abs
 @Composable
 fun MainScreen(state: LedgerState) {
     val listState = rememberLazyListState()
+    val density = LocalDensity.current
+    val swipeThreshold = with(density) { 72.dp.toPx() }
+    val swipeModifier = Modifier.pointerInput(state.currentDate, state.tab) {
+        var totalDrag = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { totalDrag = 0f },
+            onHorizontalDrag = { change, dragAmount ->
+                change.consume()
+                totalDrag += dragAmount
+            },
+            onDragEnd = {
+                if (totalDrag <= -swipeThreshold) {
+                    if (state.tab == LedgerTab.BUY) {
+                        state.toggleTab(LedgerTab.SELL)
+                    } else {
+                        state.nextDay()
+                    }
+                } else if (totalDrag >= swipeThreshold) {
+                    if (state.tab == LedgerTab.SELL) {
+                        state.toggleTab(LedgerTab.BUY)
+                    } else {
+                        state.previousDay()
+                    }
+                }
+                totalDrag = 0f
+            },
+            onDragCancel = { totalDrag = 0f }
+        )
+    }
     LaunchedEffect(state.currentDate, state.tab) {
         if (listState.firstVisibleItemIndex != 0 || listState.firstVisibleItemScrollOffset != 0) {
             listState.scrollToItem(0)
         }
     }
-    Box(Modifier.fillMaxSize().background(Bg)) {
+    Box(Modifier.fillMaxSize().background(Bg).then(swipeModifier)) {
         Column(Modifier.fillMaxSize()) {
             AppHeader(state)
             LazyColumn(
@@ -350,7 +381,7 @@ private fun DayRemarkCard(remark: String, onClick: () -> Unit) {
 private fun EntryCard(state: LedgerState, entry: LedgerEntry) {
     val tab = state.tab
     val isBuy = tab == LedgerTab.BUY
-    val title = entry.title(tab)
+    val title = state.displayTitle(entry, tab)
     val revealed = state.isRevealed(entry.id)
     val masked = state.privacyMode && !revealed
     val total = entryTotal(entry)
@@ -716,17 +747,6 @@ private fun TypeSection(
                         fontWeight = FontWeight.SemiBold
                     )
                     UnitText(" 元")
-                    if (item.manualAmount != null && !masked) {
-                        Spacer(Modifier.width(5.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(5.dp))
-                                .background(TagBg)
-                                .padding(horizontal = 5.dp, vertical = 1.dp)
-                        ) {
-                            Text("改", color = Brown, fontSize = 9.5.sp, fontWeight = FontWeight.Medium)
-                        }
-                    }
                 }
                 Text(
                     text = if (masked) "****" else fmtMoney(itemAmount(item)),

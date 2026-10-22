@@ -150,6 +150,8 @@ private fun SheetContent(state: LedgerState, sheet: Sheet) {
         is Sheet.RenameEntry -> RenameEntrySheet(state, sheet.entryId)
         is Sheet.EntryRemark -> EntryRemarkSheet(state, sheet.entryId)
         is Sheet.FinalAmount -> FinalAmountSheet(state, sheet.entryId)
+        is Sheet.SettingActions -> SettingActionsSheet(state, sheet.kind, sheet.name)
+        is Sheet.RenameSetting -> RenameSettingSheet(state, sheet.kind, sheet.oldName)
         is Sheet.Confirm -> ConfirmSheet(state, sheet)
     }
 }
@@ -357,7 +359,7 @@ private fun BuyerSelector(
             shadowElevation = 10.dp,
             border = BorderStroke(1.dp, CardBorder)
         ) {
-            state.settings.buyers.forEach { buyer ->
+            state.activeBuyers().forEach { buyer ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -405,9 +407,9 @@ private fun BuyerSelector(
 @Composable
 private fun AddTypeSheet(state: LedgerState, entryId: String) {
     val presets = if (state.tab == LedgerTab.BUY) {
-        state.settings.buyTypes
+        state.activeBuyTypes()
     } else {
-        state.settings.sellTypes
+        state.activeSellTypes()
     }
     var customName by remember { mutableStateOf("") }
     Column {
@@ -465,6 +467,11 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
     val lastPrice = remember(sheet.formKey) {
         if (!isEdit) state.findLastPrice(sheet.entryId, sheet.typeId) else null
     }
+    val focusRequester = remember(sheet.formKey) { FocusRequester() }
+    LaunchedEffect(sheet.formKey) {
+        delay(320)
+        focusRequester.requestFocus()
+    }
 
     fun autoAmount(weightText: String, priceText: String): String {
         val value = round2(
@@ -476,6 +483,7 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
     var weightText by remember(sheet.formKey) {
         mutableStateOf(item?.weight?.let { fmtNum(it) } ?: "")
     }
+    var errorText by remember(sheet.formKey) { mutableStateOf<String?>(null) }
     var priceText by remember(sheet.formKey) {
         mutableStateOf(
             item?.price?.let { fmtNum(it) }
@@ -483,26 +491,28 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
                 ?: ""
         )
     }
-    var manual by remember(sheet.formKey) { mutableStateOf(item?.manualAmount != null) }
-    var amountText by remember(sheet.formKey) {
-        mutableStateOf(
-            if (item != null) String.format(Locale.US, "%.2f", itemAmount(item)) else "0.00"
-        )
-    }
+    val amountText = autoAmount(weightText, priceText)
 
     fun save(keepOpen: Boolean) {
-        val weight = weightText.toDoubleOrNull() ?: 0.0
-        val price = priceText.toDoubleOrNull() ?: 0.0
-        val amount = amountText.toDoubleOrNull()
-        state.saveItem(
+        val weight = round2(weightText.toDoubleOrNull() ?: 0.0)
+        val price = round2(priceText.toDoubleOrNull() ?: 0.0)
+        if (weight <= 0.0) {
+            errorText = "请输入大于 0 的重量，金额为 0 时不会记录"
+            focusRequester.requestFocus()
+            return
+        }
+        errorText = null
+        val saved = state.saveItem(
             entryId = sheet.entryId,
             typeId = sheet.typeId,
             itemId = sheet.itemId,
             weight = weight,
             price = price,
-            amount = amount,
             keepOpen = keepOpen
         )
+        if (!saved) {
+            focusRequester.requestFocus()
+        }
     }
 
     Column {
@@ -517,9 +527,9 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
                     value = weightText,
                     onValueChange = {
                         weightText = it
-                        if (!manual) amountText = autoAmount(it, priceText)
+                        errorText = null
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
                     placeholder = "0",
                     keyboardType = KeyboardType.Decimal
                 )
@@ -528,10 +538,7 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
                 FieldLabel("单价（元/斤）")
                 LedgerTextField(
                     value = priceText,
-                    onValueChange = {
-                        priceText = it
-                        if (!manual) amountText = autoAmount(weightText, it)
-                    },
+                    onValueChange = { priceText = it },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = "0",
                     keyboardType = KeyboardType.Decimal
@@ -563,34 +570,51 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
-                    .background(if (manual) GoldBg else SurfaceSoft)
+                    .background(SurfaceSoft)
                     .padding(horizontal = 7.dp, vertical = 2.dp)
             ) {
                 Text(
-                    text = if (manual) "手动修改" else "自动计算",
-                    color = if (manual) PrimaryDark else Muted,
+                    text = "自动计算",
+                    color = Muted,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Medium
                 )
             }
-            Spacer(Modifier.height(7.dp))
         }
-        LedgerTextField(
-            value = amountText,
-            onValueChange = { text ->
-                if (text.isBlank()) {
-                    manual = false
-                    amountText = autoAmount(weightText, priceText)
-                } else {
-                    manual = true
-                    amountText = text
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = "0.00",
-            keyboardType = KeyboardType.Decimal,
-            isManual = manual
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 54.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(SurfaceSoft)
+                .border(1.dp, Line, RoundedCornerShape(14.dp))
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("¥", color = Primary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = amountText,
+                color = TextMain,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = "不可编辑",
+                color = Placeholder,
+                fontSize = 10.sp
+            )
+        }
+        if (errorText != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = errorText.orEmpty(),
+                color = Red,
+                fontSize = 11.5.sp,
+                lineHeight = 17.sp
+            )
+        }
         Spacer(Modifier.height(22.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -627,7 +651,7 @@ private fun EntryMenuSheet(state: LedgerState, entryId: String) {
     val entry = state.findEntry(entryId) ?: return
     val isBuy = state.tab == LedgerTab.BUY
     Column {
-        SheetTitle(entry.title(state.tab), "选择要进行的操作")
+        SheetTitle(state.displayTitle(entry, state.tab), "选择要进行的操作")
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!isBuy) {
                 SheetActionItem(
@@ -653,7 +677,11 @@ private fun EntryMenuSheet(state: LedgerState, entryId: String) {
             SheetActionItem(
                 text = "重命名${if (isBuy) "农户" else "收购方"}",
                 icon = AppIcon.Tag,
-                onClick = { state.openSheet(Sheet.RenameEntry(entryId)) }
+                onClick = {
+                    if (isBuy || state.canEditSensitive(entryId)) {
+                        state.openSheet(Sheet.RenameEntry(entryId))
+                    }
+                }
             )
             SheetActionItem(
                 text = "删除这条记录",
@@ -713,7 +741,11 @@ private fun EntryRemarkSheet(state: LedgerState, entryId: String) {
             value = remark,
             onValueChange = { remark = it },
             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-            placeholder = "输入备注"
+            placeholder = "输入备注",
+            singleLine = false,
+            minLines = 5,
+            maxLines = 8,
+            minHeight = 156.dp
         )
         Spacer(Modifier.height(20.dp))
         Row(
@@ -753,7 +785,11 @@ private fun DayRemarkSheet(state: LedgerState) {
             value = remark,
             onValueChange = { remark = it },
             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-            placeholder = "例如：下雨，只收半天"
+            placeholder = "例如：下雨，只收半天",
+            singleLine = false,
+            minLines = 5,
+            maxLines = 8,
+            minHeight = 156.dp
         )
         Spacer(Modifier.height(20.dp))
         Row(
@@ -889,6 +925,90 @@ private fun FinalAmountSheet(state: LedgerState, entryId: String) {
 }
 
 @Composable
+private fun SettingActionsSheet(state: LedgerState, kind: SettingKind, name: String) {
+    val option = state.settingsList(kind).firstOrNull { it.name == name } ?: return
+    val usage = state.settingUsage(kind, name)
+    Column {
+        SheetTitle(
+            text = name,
+            subtitle = when {
+                !option.active -> "已失效 · 记账时不会显示"
+                usage > 0 -> "已被 $usage 条记录使用"
+                else -> "尚未被记录使用"
+            }
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SheetActionItem(
+                text = "重命名",
+                icon = AppIcon.Edit,
+                onClick = { state.openSheet(Sheet.RenameSetting(kind, name)) }
+            )
+            SheetActionItem(
+                text = if (option.active) "设为失效" else "恢复使用",
+                icon = if (option.active) AppIcon.EyeOff else AppIcon.Eye,
+                onClick = {
+                    state.setSettingActive(kind, name, !option.active)
+                    state.closeSheet()
+                }
+            )
+            SheetActionItem(
+                text = if (usage > 0) "删除（已被使用，不可删除）" else "删除",
+                icon = AppIcon.Trash,
+                danger = true,
+                onClick = { state.requestDeleteSetting(kind, name) }
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+        GhostButton("取消", { state.closeSheet() }, Modifier.fillMaxWidth())
+    }
+}
+
+@Composable
+private fun RenameSettingSheet(state: LedgerState, kind: SettingKind, oldName: String) {
+    state.settingsList(kind).firstOrNull { it.name == oldName } ?: return
+    var name by remember(oldName) { mutableStateOf(oldName) }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(oldName) {
+        delay(280)
+        focusRequester.requestFocus()
+    }
+    val category = when (kind) {
+        SettingKind.BUY_TYPES -> "采购类型"
+        SettingKind.SELL_TYPES -> "销售类型"
+        SettingKind.BUYERS -> "收购方"
+    }
+    Column {
+        SheetTitle("重命名$category", "已有记账中的同名项会一起更新")
+        FieldLabel("名称")
+        LedgerTextField(
+            value = name,
+            onValueChange = { name = it },
+            modifier = Modifier.fillMaxWidth().focusRequester(focusRequester)
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "重命名后，历史记录中的名称会同步更新。",
+            color = Muted,
+            fontSize = 11.5.sp,
+            lineHeight = 17.sp
+        )
+        Spacer(Modifier.height(20.dp))
+        SheetActionRow {
+            GhostButton("取消", { state.closeSheet() }, Modifier.weight(1f))
+            PrimaryButton(
+                text = "保存",
+                onClick = {
+                    if (!state.renameSetting(kind, oldName, name)) {
+                        focusRequester.requestFocus()
+                    }
+                },
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
 private fun ConfirmSheet(state: LedgerState, sheet: Sheet.Confirm) {
     Column {
         Spacer(Modifier.height(4.dp))
@@ -900,8 +1020,9 @@ private fun ConfirmSheet(state: LedgerState, sheet: Sheet.Confirm) {
                     .background(if (sheet.destructive) RedBg else GoldBg),
                 contentAlignment = Alignment.Center
             ) {
+                val confirmIcon = sheet.icon ?: if (sheet.destructive) AppIcon.Trash else AppIcon.Check
                 AppIconView(
-                    icon = if (sheet.destructive) AppIcon.Trash else AppIcon.Check,
+                    icon = confirmIcon,
                     tint = if (sheet.destructive) Red else Primary,
                     modifier = Modifier.size(26.dp)
                 )

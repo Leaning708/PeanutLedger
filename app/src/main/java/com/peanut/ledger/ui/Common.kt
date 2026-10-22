@@ -102,6 +102,8 @@ fun LedgerTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     isManual: Boolean = false,
     singleLine: Boolean = true,
+    minLines: Int = 1,
+    maxLines: Int = 1,
     minHeight: Dp = 50.dp
 ) {
     val focusManager = LocalFocusManager.current
@@ -137,9 +139,14 @@ fun LedgerTextField(
             fontWeight = if (isManual) FontWeight.SemiBold else FontWeight.Medium
         ),
         singleLine = singleLine,
+        minLines = if (singleLine) 1 else minLines,
+        maxLines = if (singleLine) 1 else maxLines,
         cursorBrush = SolidColor(Primary),
         interactionSource = interactionSource,
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Done),
+        keyboardOptions = KeyboardOptions(
+            keyboardType = keyboardType,
+            imeAction = if (singleLine) ImeAction.Done else ImeAction.Default
+        ),
         keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
         decorationBox = { innerTextField ->
             Box(
@@ -155,7 +162,8 @@ fun LedgerTextField(
                         text = placeholder,
                         color = Placeholder,
                         fontSize = 15.5.sp,
-                        maxLines = 1
+                        lineHeight = 22.sp,
+                        maxLines = if (singleLine) 1 else 3
                     )
                 }
                 innerTextField()
