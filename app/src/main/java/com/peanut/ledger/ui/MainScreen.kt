@@ -476,45 +476,57 @@ private fun EntryCard(
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                val privacySell = !isBuy && state.privacyMode
+                val autoNamedBuy = isBuy && entry.name.trim().toIntOrNull() != null
+                val showTitle = !privacySell && !autoNamedBuy
                 val avatarLabel = when {
-                    !isBuy && state.privacyMode && !revealed -> privacyIndex.toString()
+                    privacySell -> privacyIndex.toString()
+                    autoNamedBuy -> entry.name.trim()
                     title.startsWith("户") && title.length > 1 -> title.removePrefix("户").take(2)
                     else -> title.take(1).ifBlank { "?" }
+                }
+                val metaText = buildString {
+                    val time = fmtHM(entry.createdAt)
+                    if (time.isNotBlank()) append(time)
+                    if (itemCount > 0) {
+                        if (isNotEmpty()) append("  ·  ")
+                        append(itemCount).append(" 笔称重")
+                    } else {
+                        if (isNotEmpty()) append("  ·  ")
+                        append("暂无称重")
+                    }
                 }
                 EntryAvatar(avatarLabel, isBuy)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = title,
-                            color = TextMain,
-                            fontSize = 16.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        if (!isBuy) {
-                            Spacer(Modifier.width(6.dp))
-                            SettleTag(entry.settled)
+                    if (showTitle) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = title,
+                                color = TextMain,
+                                fontSize = 16.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            if (!isBuy) {
+                                Spacer(Modifier.width(6.dp))
+                                SettleTag(entry.settled)
+                            }
                         }
+                        Spacer(Modifier.height(3.dp))
                     }
-                    Spacer(Modifier.height(3.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (!showTitle && !isBuy) {
+                            SettleTag(entry.settled)
+                            Spacer(Modifier.width(6.dp))
+                        }
                         Text(
-                            text = buildString {
-                                val time = fmtHM(entry.createdAt)
-                                if (time.isNotBlank()) append(time)
-                                if (itemCount > 0) {
-                                    if (isNotEmpty()) append("  ·  ")
-                                    append(itemCount).append(" 笔称重")
-                                } else {
-                                    if (isNotEmpty()) append("  ·  ")
-                                    append("暂无称重")
-                                }
-                            },
+                            text = metaText,
                             color = Muted,
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
+                            maxLines = 1
                         )
                         if (state.privacyMode && revealed) {
                             Spacer(Modifier.width(6.dp))
@@ -737,8 +749,13 @@ private fun EntryAvatar(label: String, isBuy: Boolean) {
         Text(
             text = label.ifBlank { "?" },
             color = CardWhite,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.Bold
+            fontSize = when {
+                label.length > 2 -> 12.5.sp
+                label.length > 1 -> 15.sp
+                else -> 17.sp
+            },
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
         )
     }
 }
@@ -930,7 +947,7 @@ private fun EmptyState(tab: LedgerTab) {
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = if (tab == LedgerTab.BUY) "点击下方「新增农户」记下第一笔" else "点击下方「新增收购」记下第一笔",
+            text = if (tab == LedgerTab.BUY) "点击下方「新增采购」记下第一笔" else "点击下方「新增销售」记下第一笔",
             color = Muted,
             fontSize = 12.5.sp,
             textAlign = TextAlign.Center
@@ -1077,7 +1094,7 @@ private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier =
                         AppIconView(AppIcon.Plus, tint = CardWhite, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(5.dp))
                         Text(
-                            text = if (state.tab == LedgerTab.BUY) "新增农户" else "新增收购",
+                            text = if (state.tab == LedgerTab.BUY) "新增采购" else "新增销售",
                             color = CardWhite,
                             fontSize = 13.5.sp,
                             fontWeight = FontWeight.SemiBold,

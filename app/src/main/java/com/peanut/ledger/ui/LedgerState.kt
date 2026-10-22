@@ -22,7 +22,7 @@ import com.peanut.ledger.data.LedgerTab
 import com.peanut.ledger.data.LedgerType
 import com.peanut.ledger.data.NamedOption
 import com.peanut.ledger.data.newId
-import com.peanut.ledger.data.nextFarmerName
+import com.peanut.ledger.data.nextSupplierNumber
 import com.peanut.ledger.data.round2
 import com.peanut.ledger.ui.theme.AppTheme
 import com.peanut.ledger.ui.theme.setActiveTheme
@@ -36,7 +36,7 @@ enum class CalendarMode { DAY, MONTH, YEAR }
 enum class SettingKind(val label: String, val placeholder: String) {
     BUY_TYPES("采购类型", "例如：特大果"),
     SELL_TYPES("销售类型", "例如：统货米"),
-    BUYERS("收购方", "例如：某某油厂")
+    BUYERS("收购商", "例如：某某油厂")
 }
 
 data class ToastMessage(val id: Long, val text: String)
@@ -169,10 +169,10 @@ class LedgerState(private val context: Context) {
         targetTab: LedgerTab = tab,
         displayIndex: Int? = null
     ): String {
-        if (targetTab == LedgerTab.SELL && privacyMode && !isRevealed(entry.id)) {
+        if (targetTab == LedgerTab.SELL && privacyMode) {
             val number = displayIndex
                 ?: (currentDay.sells.indexOfFirst { it.id == entry.id } + 1).takeIf { it > 0 }
-            return if (number != null) "收$number" else "收购方"
+            return if (number != null) "收$number" else "收购商"
         }
         return entry.title(targetTab)
     }
@@ -368,7 +368,7 @@ class LedgerState(private val context: Context) {
                 val message = "备份时间：${check.info.timeLabel}\n" +
                     "备份数据版本：${check.info.versionLabel}（code ${check.info.appVersionCode}）\n" +
                     "当前 APP 版本：v${BackupManager.currentAppVersionName()}（code ${BackupManager.currentAppVersionCode()}）\n\n" +
-                    "恢复后，当前所有记账、类型、收购方和设置都会被这份历史数据覆盖，且无法撤销。" +
+                    "恢复后，当前所有记账、类型、收购商和设置都会被这份历史数据覆盖，且无法撤销。" +
                     "恢复前会先自动创建一份当前数据的安全备份。$migratedLine"
                 openSheet(
                     Sheet.Confirm(
@@ -603,17 +603,16 @@ class LedgerState(private val context: Context) {
         return DayStats(round2(buy), round2(sell))
     }
 
-    fun nextFarmerName(): String = nextFarmerName(currentDay.buys)
-
     fun addEntry(
         name: String,
         buyer: String,
-        newBuyer: Boolean = false,
         location: EntryLocation? = null
     ) {
         var openTypeFor: String? = null
         if (tab == LedgerTab.BUY) {
-            val finalName = name.trim().ifBlank { nextFarmerName(currentDay.buys) }
+            val finalName = name.trim().ifBlank {
+                nextSupplierNumber(currentDay.buys).toString()
+            }
             val entry = LedgerEntry(
                 id = newId(),
                 name = finalName,
@@ -622,14 +621,24 @@ class LedgerState(private val context: Context) {
             )
             updateDay { it.copy(buys = it.buys + entry) }
             openTypeFor = entry.id
-            showToast("已添加 $finalName，请选择采购类型")
+            showToast(
+                if (finalName.toIntOrNull() != null) {
+                    "已添加序号 $finalName，请选择采购类型"
+                } else {
+                    "已添加 $finalName，请选择采购类型"
+                }
+            )
         } else {
             val finalBuyer = buyer.trim()
+            val validBuyer = data.settings.buyers.any { it.active && it.name == finalBuyer }
             if (finalBuyer.isBlank()) {
-                showToast("请选择收购方")
+                showToast("请选择收购商")
                 return
             }
-            if (newBuyer) ensureBuyerOption(finalBuyer)
+            if (!validBuyer) {
+                showToast("请选择设置中的收购商")
+                return
+            }
             val entry = LedgerEntry(
                 id = newId(),
                 buyer = finalBuyer,
@@ -644,16 +653,34 @@ class LedgerState(private val context: Context) {
     }
 
     fun renameEntry(entryId: String, newName: String) {
+        if (tab != LedgerTab.BUY) {
+            showToast("收购商名称请在设置中修改")
+            return
+        }
         val clean = newName.trim()
         if (clean.isBlank()) {
             showToast("请输入名称")
             return
         }
-        updateEntry(entryId) { entry ->
-            if (tab == LedgerTab.BUY) entry.copy(name = clean) else entry.copy(buyer = clean)
-        }
+        updateEntry(entryId) { entry -> entry.copy(name = clean) }
         sheet = null
         showToast("已修改")
+    }
+
+    private fun ensureSaleBuyersBound() {
+        val existing = data.settings.buyers.map { it.name }.toSet()
+        val missing = data.days.values
+            .flatMap { it.sells }
+            .map { it.buyer.trim() }
+            .filter { it.isNotBlank() && it !in existing }
+            .distinct()
+        if (missing.isEmpty()) return
+        data = data.copy(
+            settings = data.settings.copy(
+                buyers = data.settings.buyers + missing.map { NamedOption(it) }
+            )
+        )
+        persist()
     }
 
     fun toggleSettled(entryId: String) {
@@ -1047,18 +1074,6 @@ class LedgerState(private val context: Context) {
         persist()
     }
 
-    private fun ensureBuyerOption(name: String) {
-        val list = data.settings.buyers
-        val index = list.indexOfFirst { it.name == name }
-        val next = if (index >= 0) {
-            if (list[index].active) return
-            list.toMutableList().also { it[index] = it[index].copy(active = true) }
-        } else {
-            list + NamedOption(name)
-        }
-        data = data.copy(settings = data.settings.copy(buyers = next))
-    }
-
     private fun renameInDay(kind: SettingKind, day: DayData, oldName: String, newName: String): DayData =
         when (kind) {
             SettingKind.BUY_TYPES -> day.copy(
@@ -1101,7 +1116,7 @@ class LedgerState(private val context: Context) {
         openSheet(
             Sheet.Confirm(
                 title = "清空所有记账数据",
-                message = "类型和收购方设置会保留，此操作不可撤销。",
+                message = "类型和收购商设置会保留，此操作不可撤销。",
                 confirmLabel = "清空"
             ) {
                 data = data.copy(days = emptyMap())

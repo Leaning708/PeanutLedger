@@ -139,11 +139,13 @@ fun entryFinal(entry: LedgerEntry): Double {
 
 fun entryHasUnsettled(entry: LedgerEntry): Boolean = !entry.settled
 
-fun nextFarmerName(entries: List<LedgerEntry>): String {
-    val used = entries.map { it.name }.toSet()
+fun nextSupplierNumber(entries: List<LedgerEntry>): Int {
+    val used = entries.mapNotNull { entry ->
+        entry.name.trim().removePrefix("户").toIntOrNull()
+    }.toSet()
     var index = 1
-    while (used.contains("户$index")) index++
-    return "户$index"
+    while (used.contains(index)) index++
+    return index
 }
 
 fun findLastPriceInEntry(entry: LedgerEntry, typeId: String): Double? {

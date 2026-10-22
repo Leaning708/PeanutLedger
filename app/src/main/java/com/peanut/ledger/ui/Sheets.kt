@@ -252,7 +252,7 @@ private enum class LocationStatus { DISABLED, REQUESTING, LOCATING, FOUND, DENIE
 
 @Composable
 private fun AddFarmerSheet(state: LedgerState) {
-    var name by remember { mutableStateOf(state.nextFarmerName()) }
+    var name by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -337,16 +337,23 @@ private fun AddFarmerSheet(state: LedgerState) {
 
     Column {
         SheetTitle(
-            "新增农户",
-            if (state.recordLocation) "记录农户和当前位置，稍后添加采购类型"
-            else "记录农户信息，稍后添加采购类型"
+            "新增采购",
+            if (state.recordLocation) "记录供货商和当前位置，稍后添加采购类型"
+            else "记录供货商信息，稍后添加采购类型"
         )
-        FieldLabel("农户名称")
+        FieldLabel("供货商名称")
         LedgerTextField(
             value = name,
             onValueChange = { name = it },
             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-            placeholder = "输入农户名称"
+            placeholder = "可选，留空自动使用序号"
+        )
+        Spacer(Modifier.height(5.dp))
+        Text(
+            text = "留空保存时，将按当天采购顺序显示为 1、2、3…",
+            color = Muted,
+            fontSize = 10.sp,
+            lineHeight = 15.sp
         )
         Spacer(Modifier.height(12.dp))
         Row(
@@ -420,36 +427,29 @@ private fun AddFarmerSheet(state: LedgerState) {
 @Composable
 private fun AddBuyerEntrySheet(state: LedgerState) {
     var selectedBuyer by remember { mutableStateOf("") }
-    var showNewBuyer by remember { mutableStateOf(false) }
-    var newBuyerName by remember { mutableStateOf("") }
     var menuExpanded by remember { mutableStateOf(false) }
+    val activeBuyers = state.activeBuyers()
 
     Column {
-        SheetTitle("新增收购记录", "选择收购方，稍后添加销售类型和称重")
-        FieldLabel("收购方")
+        SheetTitle("新增销售", "选择收购商，稍后添加销售类型和称重")
+        FieldLabel("收购商")
         BuyerSelector(
             state = state,
-            selected = if (showNewBuyer) "＋ 新增收购方..." else selectedBuyer,
+            selected = selectedBuyer,
             expanded = menuExpanded,
             onExpandedChange = { menuExpanded = it },
             onPick = { buyer ->
                 selectedBuyer = buyer
-                showNewBuyer = false
-                menuExpanded = false
-            },
-            onPickNew = {
-                showNewBuyer = true
                 menuExpanded = false
             }
         )
-        if (showNewBuyer) {
-            Spacer(Modifier.height(14.dp))
-            FieldLabel("新收购方名称")
-            LedgerTextField(
-                value = newBuyerName,
-                onValueChange = { newBuyerName = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = "输入收购方名称"
+        if (activeBuyers.isEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "设置中暂无收购商，请先在「设置 → 收购商」中添加。",
+                color = Red,
+                fontSize = 10.5.sp,
+                lineHeight = 16.sp
             )
         }
         Spacer(Modifier.height(20.dp))
@@ -458,14 +458,10 @@ private fun AddBuyerEntrySheet(state: LedgerState) {
             PrimaryButton(
                 text = "保存",
                 onClick = {
-                    if (showNewBuyer) {
-                        state.addEntry("", newBuyerName, newBuyer = true)
+                    if (selectedBuyer.isBlank()) {
+                        state.showToast("请选择收购商")
                     } else {
-                        if (selectedBuyer.isBlank()) {
-                            state.showToast("请选择收购方")
-                        } else {
-                            state.addEntry("", selectedBuyer)
-                        }
+                        state.addEntry("", selectedBuyer)
                     }
                 },
                 modifier = Modifier.weight(1f)
@@ -474,14 +470,14 @@ private fun AddBuyerEntrySheet(state: LedgerState) {
     }
 }
 
+
 @Composable
 private fun BuyerSelector(
     state: LedgerState,
     selected: String,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
-    onPick: (String) -> Unit,
-    onPickNew: () -> Unit
+    onPick: (String) -> Unit
 ) {
     Box {
         Row(
@@ -495,7 +491,7 @@ private fun BuyerSelector(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = selected.ifBlank { "请选择收购方" },
+                text = selected.ifBlank { "请选择收购商" },
                 color = if (selected.isBlank()) Placeholder else TextMain,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
@@ -519,46 +515,44 @@ private fun BuyerSelector(
             shadowElevation = 10.dp,
             border = BorderStroke(1.dp, CardBorder)
         ) {
-            state.activeBuyers().forEach { buyer ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onPick(buyer) }
-                        .padding(horizontal = 16.dp, vertical = 13.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        Modifier
-                            .size(26.dp)
-                            .clip(CircleShape)
-                            .background(SurfaceSoft),
-                        contentAlignment = Alignment.Center
+            val buyers = state.activeBuyers()
+            if (buyers.isEmpty()) {
+                Text(
+                    text = "设置中暂无收购商，请先到设置中添加",
+                    color = Placeholder,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
+                )
+            } else {
+                buyers.forEach { buyer ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPick(buyer) }
+                            .padding(horizontal = 16.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            buyer.take(1),
-                            color = Primary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    Text(buyer, fontSize = 15.sp, color = TextMain, modifier = Modifier.weight(1f))
-                    if (buyer == selected) {
-                        AppIconView(AppIcon.Check, tint = Primary, modifier = Modifier.size(15.dp))
+                        Box(
+                            Modifier
+                                .size(26.dp)
+                                .clip(CircleShape)
+                                .background(SurfaceSoft),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                buyer.take(1),
+                                color = Primary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Text(buyer, fontSize = 15.sp, color = TextMain, modifier = Modifier.weight(1f))
+                        if (buyer == selected) {
+                            AppIconView(AppIcon.Check, tint = Primary, modifier = Modifier.size(15.dp))
+                        }
                     }
                 }
-            }
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onPickNew)
-                    .padding(horizontal = 16.dp, vertical = 13.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                AppIconView(AppIcon.Plus, tint = Primary, modifier = Modifier.size(15.dp))
-                Spacer(Modifier.width(11.dp))
-                Text("新增收购方", fontSize = 15.sp, color = Primary, fontWeight = FontWeight.Medium)
             }
         }
     }
@@ -988,15 +982,13 @@ private fun EntryMenuSheet(state: LedgerState, entryId: String) {
                 icon = AppIcon.Note,
                 onClick = { state.openSheet(Sheet.EntryRemark(entryId)) }
             )
-            SheetActionItem(
-                text = "重命名${if (isBuy) "农户" else "收购方"}",
-                icon = AppIcon.Tag,
-                onClick = {
-                    if (isBuy || state.canEditSensitive(entryId)) {
-                        state.openSheet(Sheet.RenameEntry(entryId))
-                    }
-                }
-            )
+            if (isBuy) {
+                SheetActionItem(
+                    text = "重命名供货商",
+                    icon = AppIcon.Tag,
+                    onClick = { state.openSheet(Sheet.RenameEntry(entryId)) }
+                )
+            }
             SheetActionItem(
                 text = "删除这条记录",
                 icon = AppIcon.Trash,
@@ -1020,7 +1012,7 @@ private fun RenameEntrySheet(state: LedgerState, entryId: String) {
         focusRequester.requestFocus()
     }
     Column {
-        SheetTitle("重命名${if (isBuy) "农户" else "收购方"}")
+        SheetTitle("重命名供货商")
         FieldLabel("名称")
         LedgerTextField(
             value = name,
@@ -1279,7 +1271,7 @@ private fun RenameSettingSheet(state: LedgerState, kind: SettingKind, oldName: S
     val category = when (kind) {
         SettingKind.BUY_TYPES -> "采购类型"
         SettingKind.SELL_TYPES -> "销售类型"
-        SettingKind.BUYERS -> "收购方"
+        SettingKind.BUYERS -> "收购商"
     }
     Column {
         SheetTitle("重命名$category", "已有记账中的同名项会一起更新")

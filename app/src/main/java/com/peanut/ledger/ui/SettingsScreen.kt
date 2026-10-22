@@ -101,7 +101,7 @@ fun SettingsScreen(state: LedgerState) {
                     )
                     Spacer(Modifier.height(7.dp))
                     Text(
-                        text = "数据仅保存在本机 · 花生账本 v0.1.7",
+                        text = "数据仅保存在本机 · 花生账本 v0.1.8",
                         color = Placeholder,
                         fontSize = 11.sp,
                         textAlign = TextAlign.Center
@@ -555,7 +555,7 @@ private fun LocationBlock(state: LedgerState) {
                 Text("位置记录", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(3.dp))
                 Text(
-                    text = "新增农户时记录当前位置并标记在条目上；隐私模式下不显示",
+                    text = "新增采购时记录供货商当前位置并标记在条目上；隐私模式下不显示",
                     color = Muted,
                     fontSize = 11.5.sp,
                     lineHeight = 17.sp
@@ -671,7 +671,7 @@ private fun DataBlock(state: LedgerState) {
                     fontWeight = FontWeight.SemiBold
                 )
                 Spacer(Modifier.height(2.dp))
-                Text("类型与收购方设置会保留", color = Muted, fontSize = 11.sp)
+                Text("类型与收购商设置会保留", color = Muted, fontSize = 11.sp)
             }
             AppIconView(AppIcon.ChevronRight, tint = Muted, modifier = Modifier.size(14.dp))
         }

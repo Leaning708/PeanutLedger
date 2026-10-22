@@ -724,10 +724,10 @@ private fun PartyRankCard(ranking: List<PartyStat>) {
     LedgerCard(contentPadding = PaddingValues(16.dp)) {
         Text("往来排行", color = TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(3.dp))
-        Text("商品收购方", color = Muted, fontSize = 11.sp)
+        Text("商品收购商", color = Muted, fontSize = 11.sp)
         Spacer(Modifier.height(12.dp))
         if (ranking.isEmpty()) {
-            Text("当前周期暂无商品收购方", color = Placeholder, fontSize = 11.sp)
+            Text("当前周期暂无商品收购商", color = Placeholder, fontSize = 11.sp)
         } else {
             ranking.forEachIndexed { index, item ->
                 Row(
