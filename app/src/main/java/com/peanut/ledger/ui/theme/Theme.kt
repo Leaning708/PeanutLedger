@@ -1,11 +1,14 @@
 package com.peanut.ledger.ui.theme
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 private val ColorScheme = lightColorScheme(
@@ -18,10 +21,18 @@ private val ColorScheme = lightColorScheme(
     onBackground = TextMain,
     surface = CardWhite,
     onSurface = TextMain,
-    surfaceVariant = SubBg,
+    surfaceVariant = SurfaceSoft,
     onSurfaceVariant = Muted,
     outline = FieldBorder,
     error = Red
+)
+
+private val AppShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(28.dp)
 )
 
 private val AppTypography = Typography(
@@ -37,8 +48,13 @@ private val AppTypography = Typography(
     ),
     titleLarge = TextStyle(
         fontWeight = FontWeight.Bold,
-        fontSize = 18.sp,
-        lineHeight = 24.sp
+        fontSize = 20.sp,
+        lineHeight = 26.sp
+    ),
+    titleMedium = TextStyle(
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 16.sp,
+        lineHeight = 22.sp
     ),
     labelMedium = TextStyle(
         fontWeight = FontWeight.Medium,
@@ -52,6 +68,7 @@ fun PeanutLedgerTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = ColorScheme,
         typography = AppTypography,
+        shapes = AppShapes,
         content = content
     )
 }

@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -73,11 +74,12 @@ private fun ToastHost(state: LedgerState) {
         ) {
             Box(
                 modifier = Modifier
-                    .padding(bottom = 110.dp)
+                    .padding(bottom = 124.dp)
                     .navigationBarsPadding()
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(Color(0xEB2D2822))
-                    .padding(horizontal = 18.dp, vertical = 10.dp)
+                    .shadow(8.dp, RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xF22C251E))
+                    .padding(horizontal = 18.dp, vertical = 11.dp)
             ) {
                 Text(
                     text = displayedToast?.text.orEmpty(),

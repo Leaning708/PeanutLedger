@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -32,23 +34,26 @@ import com.peanut.ledger.data.fmtMoney
 import com.peanut.ledger.data.fmtProfitMoney
 import com.peanut.ledger.data.fmtProfitShort
 import com.peanut.ledger.data.fmtSigned
-import com.peanut.ledger.data.weekdayShort
+import com.peanut.ledger.ui.theme.CardBorder
 import com.peanut.ledger.ui.theme.CardWhite
+import com.peanut.ledger.ui.theme.GoldBg
 import com.peanut.ledger.ui.theme.Green
+import com.peanut.ledger.ui.theme.Line
+import com.peanut.ledger.ui.theme.Muted
 import com.peanut.ledger.ui.theme.Placeholder
 import com.peanut.ledger.ui.theme.Primary
+import com.peanut.ledger.ui.theme.PrimaryDark
 import com.peanut.ledger.ui.theme.Red
-import com.peanut.ledger.ui.theme.SubBg
+import com.peanut.ledger.ui.theme.SurfaceSoft
 import com.peanut.ledger.ui.theme.TextMain
+import com.peanut.ledger.ui.theme.TextSoft
 import com.peanut.ledger.ui.theme.TodayBg
-import com.peanut.ledger.ui.theme.Muted
 import java.time.LocalDate
 import java.time.YearMonth
 import kotlin.math.abs
 
-private val CalendarGap = 4.dp
-private val DayCellShape = RoundedCornerShape(10.dp)
-private val MonthCellShape = RoundedCornerShape(12.dp)
+private val DayCellShape = RoundedCornerShape(12.dp)
+private val MonthCellShape = RoundedCornerShape(14.dp)
 
 @Composable
 fun CalendarSheet(state: LedgerState) {
@@ -68,15 +73,15 @@ fun CalendarSheet(state: LedgerState) {
     Column {
         SheetTitle("选择日期")
         CalendarSummary(state, summary, summaryLabel)
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
         CalendarHeader(state)
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
         when (mode) {
             CalendarMode.DAY -> DayCalendar(state)
             CalendarMode.MONTH -> MonthCalendar(state)
             CalendarMode.YEAR -> YearCalendar(state)
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(16.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -89,48 +94,51 @@ fun CalendarSheet(state: LedgerState) {
 
 @Composable
 private fun CalendarSummary(state: LedgerState, stats: DayStats, label: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(SubBg)
-            .padding(horizontal = 6.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = SurfaceSoft,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Line)
     ) {
-        SummaryCell(
-            label = "${label}支出",
-            value = if (state.privacyMode) "****" else fmtMoney(stats.buy),
-            color = if (state.privacyMode) Placeholder else TextMain,
-            modifier = Modifier.weight(1f)
-        )
-        SummaryCell(
-            label = "${label}收入",
-            value = if (state.privacyMode) "****" else fmtMoney(stats.sell),
-            color = if (state.privacyMode) Placeholder else TextMain,
-            modifier = Modifier.weight(1f)
-        )
-        SummaryCell(
-            label = "${label}收支",
-            value = if (state.privacyMode) "****" else fmtSigned(stats.profit),
-            color = when {
-                state.privacyMode -> Placeholder
-                stats.profit >= 0 -> Primary
-                else -> Green
-            },
-            modifier = Modifier.weight(1f)
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            SummaryCell(
+                label = "${label}支出",
+                value = if (state.privacyMode) "****" else fmtMoney(stats.buy),
+                color = if (state.privacyMode) Placeholder else TextMain,
+                modifier = Modifier.weight(1f)
+            )
+            SummaryCell(
+                label = "${label}收入",
+                value = if (state.privacyMode) "****" else fmtMoney(stats.sell),
+                color = if (state.privacyMode) Placeholder else TextMain,
+                modifier = Modifier.weight(1f)
+            )
+            SummaryCell(
+                label = "${label}收支",
+                value = if (state.privacyMode) "****" else fmtSigned(stats.profit),
+                color = when {
+                    state.privacyMode -> Placeholder
+                    stats.profit >= 0 -> Primary
+                    else -> Green
+                },
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 
 @Composable
 private fun SummaryCell(label: String, value: String, color: Color, modifier: Modifier) {
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, color = Color(0xFFA2988A), fontSize = 10.5.sp, maxLines = 1)
-        Spacer(Modifier.height(3.dp))
+        Text(label, color = Muted, fontSize = 10.5.sp, maxLines = 1)
+        Spacer(Modifier.height(4.dp))
         Text(
             text = value,
             color = color,
-            fontSize = 12.5.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -157,11 +165,11 @@ private fun CalendarHeader(state: LedgerState) {
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        CalendarNavButton("‹") { state.shiftCalendar(-1) }
+        CalendarNavButton(AppIcon.ChevronLeft, "上个月") { state.shiftCalendar(-1) }
         Row(
             modifier = Modifier
                 .weight(1f)
-                .clip(RoundedCornerShape(9.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .clickable {
                     val next = when (mode) {
                         CalendarMode.DAY -> CalendarMode.MONTH
@@ -170,7 +178,7 @@ private fun CalendarHeader(state: LedgerState) {
                     }
                     state.changeCalendarMode(next)
                 }
-                .padding(vertical = 6.dp),
+                .padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -178,35 +186,33 @@ private fun CalendarHeader(state: LedgerState) {
             Spacer(Modifier.width(6.dp))
             ModeTag(tag)
         }
-        CalendarNavButton("›") { state.shiftCalendar(1) }
+        CalendarNavButton(AppIcon.ChevronRight, "下个月") { state.shiftCalendar(1) }
     }
 }
 
 @Composable
-private fun CalendarNavButton(text: String, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(38.dp)
-            .clip(CircleShape)
-            .background(Color(0xFFF5EFE5))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text, color = Color(0xFF8A6A45), fontSize = 23.sp, lineHeight = 23.sp)
-    }
+private fun CalendarNavButton(icon: AppIcon, description: String, onClick: () -> Unit) {
+    CircleIconButton(
+        icon = icon,
+        description = description,
+        onClick = onClick,
+        tint = PrimaryDark,
+        background = SurfaceSoft
+    )
 }
 
 @Composable
 private fun WeekHeader() {
     Row(
         modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(CalendarGap)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         listOf("日", "一", "二", "三", "四", "五", "六").forEach { day ->
             Text(
                 text = day,
-                color = Color(0xFFA2988A),
-                fontSize = 11.5.sp,
+                color = Muted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f)
             )
@@ -245,11 +251,11 @@ private fun DayCalendar(state: LedgerState) {
     val cells = buildDayCells(state.calendarAnchor)
     Column {
         WeekHeader()
-        Column(verticalArrangement = Arrangement.spacedBy(CalendarGap)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             cells.chunked(7).forEach { week ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(CalendarGap)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     week.forEach { cell ->
                         DayCellView(state, cell, today)
@@ -261,7 +267,7 @@ private fun DayCalendar(state: LedgerState) {
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.RowScope.DayCellView(
+private fun RowScope.DayCellView(
     state: LedgerState,
     cell: DayCell,
     today: LocalDate
@@ -269,27 +275,35 @@ private fun androidx.compose.foundation.layout.RowScope.DayCellView(
     val selected = cell.date == state.currentDate
     val isToday = cell.date == today
     val stats = state.statsOf(cell.date)
-    val background = when {
-        selected -> Primary
-        isToday -> TodayBg
-        else -> Color.Transparent
+    val shape = DayCellShape
+    val base = Modifier
+        .weight(1f)
+        .heightIn(min = 50.dp)
+        .clip(shape)
+        .clickable { state.selectDate(cell.date) }
+    val backgroundModifier = if (selected) {
+        base.background(TopGradient)
+    } else {
+        base
+            .background(if (isToday) TodayBg else Color.Transparent)
+            .then(
+                if (isToday) {
+                    Modifier.border(1.dp, Primary.copy(alpha = 0.22f), shape)
+                } else {
+                    Modifier
+                }
+            )
     }
     Box(
-        modifier = Modifier
-            .weight(1f)
-            .heightIn(min = 50.dp)
-            .clip(DayCellShape)
-            .background(if (selected) TopGradient else androidx.compose.ui.graphics.SolidColor(background))
-            .clickable { state.selectDate(cell.date) }
-            .padding(vertical = 4.dp),
+        modifier = backgroundModifier.padding(vertical = 5.dp),
         contentAlignment = Alignment.Center
     ) {
         if (state.dayHasUnsettled(cell.date)) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 3.dp, end = 3.dp)
-                    .size(7.dp)
+                    .padding(top = 4.dp, end = 4.dp)
+                    .size(6.dp)
                     .clip(CircleShape)
                     .background(Red)
                     .border(1.dp, CardWhite, CircleShape)
@@ -300,18 +314,19 @@ private fun androidx.compose.foundation.layout.RowScope.DayCellView(
                 text = cell.date.dayOfMonth.toString(),
                 color = when {
                     selected -> CardWhite
-                    cell.other -> Color(0xFFCFC5B6)
+                    cell.other -> Placeholder
+                    isToday -> PrimaryDark
                     else -> TextMain
                 },
                 fontSize = 14.sp,
-                fontWeight = if (cell.other && !selected) FontWeight.Normal else FontWeight.SemiBold
+                fontWeight = if (cell.other && !selected) FontWeight.Medium else FontWeight.SemiBold
             )
             if (!state.privacyMode && abs(stats.profit) >= 0.005) {
                 Text(
                     text = fmtProfitShort(stats.profit),
                     color = when {
-                        selected -> CardWhite
-                        cell.other -> profitColor(stats.profit).copy(alpha = 0.55f)
+                        selected -> CardWhite.copy(alpha = 0.92f)
+                        cell.other -> profitColor(stats.profit).copy(alpha = 0.5f)
                         else -> profitColor(stats.profit)
                     },
                     fontSize = 9.sp,
@@ -343,19 +358,19 @@ private fun MonthCalendar(state: LedgerState) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 58.dp)
+                            .heightIn(min = 60.dp)
                             .clip(MonthCellShape)
                             .background(
-                                if (isCurrent) Color(0xFFFFF7EC)
-                                else if (isTodayMonth) TodayBg
-                                else SubBg
-                            )
-                            .then(
-                                if (isCurrent) {
-                                    Modifier.border(2.dp, Primary, MonthCellShape)
-                                } else {
-                                    Modifier
+                                when {
+                                    isCurrent -> Color(0xFFFFF9F0)
+                                    isTodayMonth -> TodayBg
+                                    else -> SurfaceSoft
                                 }
+                            )
+                            .border(
+                                if (isCurrent) 1.5.dp else 1.dp,
+                                if (isCurrent) Primary else Line,
+                                MonthCellShape
                             )
                             .clickable { state.pickCalendarMonth(anchor.year, month) }
                             .padding(vertical = 12.dp, horizontal = 4.dp),
@@ -366,7 +381,7 @@ private fun MonthCalendar(state: LedgerState) {
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(top = 7.dp, end = 7.dp)
-                                    .size(7.dp)
+                                    .size(6.dp)
                                     .clip(CircleShape)
                                     .background(Red)
                                     .border(1.dp, CardWhite, CircleShape)
@@ -375,11 +390,11 @@ private fun MonthCalendar(state: LedgerState) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = "${month}月",
-                                color = TextMain,
-                                fontSize = 15.sp,
+                                color = if (isCurrent) PrimaryDark else TextMain,
+                                fontSize = 14.5.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
-                            Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(5.dp))
                             Text(
                                 text = when {
                                     state.privacyMode -> "****"
@@ -423,15 +438,13 @@ private fun YearCalendar(state: LedgerState) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 58.dp)
+                            .heightIn(min = 60.dp)
                             .clip(MonthCellShape)
-                            .background(if (isCurrent) Color(0xFFFFF7EC) else SubBg)
-                            .then(
-                                if (isCurrent) {
-                                    Modifier.border(2.dp, Primary, MonthCellShape)
-                                } else {
-                                    Modifier
-                                }
+                            .background(if (isCurrent) Color(0xFFFFF9F0) else SurfaceSoft)
+                            .border(
+                                if (isCurrent) 1.5.dp else 1.dp,
+                                if (isCurrent) Primary else Line,
+                                MonthCellShape
                             )
                             .clickable { state.pickCalendarYear(year) }
                             .padding(vertical = 12.dp, horizontal = 4.dp),
@@ -442,7 +455,7 @@ private fun YearCalendar(state: LedgerState) {
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(top = 7.dp, end = 7.dp)
-                                    .size(7.dp)
+                                    .size(6.dp)
                                     .clip(CircleShape)
                                     .background(Red)
                                     .border(1.dp, CardWhite, CircleShape)
@@ -451,11 +464,11 @@ private fun YearCalendar(state: LedgerState) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = "${year}年",
-                                color = TextMain,
-                                fontSize = 15.sp,
+                                color = if (isCurrent) PrimaryDark else TextMain,
+                                fontSize = 14.5.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
-                            Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(5.dp))
                             Text(
                                 text = when {
                                     state.privacyMode -> "****"

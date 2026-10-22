@@ -1,8 +1,10 @@
 package com.peanut.ledger.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -10,11 +12,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -24,23 +29,19 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -66,27 +67,27 @@ import com.peanut.ledger.data.round2
 import com.peanut.ledger.data.typeSubtotal
 import com.peanut.ledger.data.weekLabel
 import com.peanut.ledger.ui.theme.Bg
+import com.peanut.ledger.ui.theme.Brown
+import com.peanut.ledger.ui.theme.CardBorder
 import com.peanut.ledger.ui.theme.CardWhite
-import com.peanut.ledger.ui.theme.DashedLine
 import com.peanut.ledger.ui.theme.GoldBg
 import com.peanut.ledger.ui.theme.Green
 import com.peanut.ledger.ui.theme.GreenBg
 import com.peanut.ledger.ui.theme.IconMuted
 import com.peanut.ledger.ui.theme.Line
 import com.peanut.ledger.ui.theme.Muted
+import com.peanut.ledger.ui.theme.MutedLight
 import com.peanut.ledger.ui.theme.Placeholder
 import com.peanut.ledger.ui.theme.Primary
 import com.peanut.ledger.ui.theme.PrimaryDark
 import com.peanut.ledger.ui.theme.Red
 import com.peanut.ledger.ui.theme.RedBg
-import com.peanut.ledger.ui.theme.SegBg
-import com.peanut.ledger.ui.theme.SubBg
+import com.peanut.ledger.ui.theme.SurfaceSoft
 import com.peanut.ledger.ui.theme.TagBg
 import com.peanut.ledger.ui.theme.TextMain
 import com.peanut.ledger.ui.theme.TextSoft
-import com.peanut.ledger.ui.theme.Amber
-import com.peanut.ledger.ui.theme.Brown
 import java.time.LocalDate
+import java.util.Locale
 import kotlin.math.abs
 
 @Composable
@@ -103,7 +104,7 @@ fun MainScreen(state: LedgerState) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth().weight(1f),
-                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 116.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 132.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 val day = state.currentDay
@@ -122,7 +123,18 @@ fun MainScreen(state: LedgerState) {
                 }
             }
         }
-        BottomBar(
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(150.dp)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, Bg.copy(alpha = 0.9f), Bg)
+                    )
+                )
+        )
+        BottomDock(
             state = state,
             stats = state.statsOf(state.currentDate),
             modifier = Modifier.align(Alignment.BottomCenter)
@@ -132,139 +144,167 @@ fun MainScreen(state: LedgerState) {
 
 @Composable
 private fun AppHeader(state: LedgerState) {
-    Column(Modifier.fillMaxWidth().background(Bg)) {
-        Box(
+    val today = LocalDate.now()
+    val isToday = state.currentDate == today
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
+            .background(TopGradient)
+    ) {
+        HeaderDecoration(Modifier.matchParentSize())
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .shadow(
-                    elevation = 5.dp,
-                    shape = RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp),
-                    clip = false
-                )
-                .clip(RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp))
-                .background(TopGradient)
+                .statusBarsPadding()
+                .padding(top = 3.dp, bottom = 15.dp)
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                RoundNavButton("‹", "前一天") { state.previousDay() }
+                CircleIconButton(
+                    icon = AppIcon.ChevronLeft,
+                    description = "前一天",
+                    onClick = { state.previousDay() }
+                )
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(horizontal = 6.dp)
-                        .clickable { state.openCalendar() },
+                        .padding(horizontal = 4.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { state.openCalendar() }
+                        .padding(vertical = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CalendarGlyph(Modifier.size(16.dp))
-                        Spacer(Modifier.width(7.dp))
-                        Text(
-                            text = dateLabel(state.currentDate),
-                            color = CardWhite,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
-                        )
-                    }
+                    Text(
+                        text = "花生账本",
+                        color = CardWhite.copy(alpha = 0.58f),
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 3.sp
+                    )
                     Spacer(Modifier.height(2.dp))
-                    val isToday = state.currentDate == LocalDate.now()
+                    Text(
+                        text = "${state.currentDate.monthValue}月${state.currentDate.dayOfMonth}日",
+                        color = CardWhite,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                    Spacer(Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "${weekLabel(state.currentDate)} · ",
-                            color = CardWhite.copy(alpha = 0.85f),
-                            fontSize = 12.sp
+                            text = "${state.currentDate.year}年 · ${weekLabel(state.currentDate)} · ",
+                            color = CardWhite.copy(alpha = 0.72f),
+                            fontSize = 11.5.sp
                         )
                         if (isToday) {
-                            Text("今天", color = CardWhite.copy(alpha = 0.85f), fontSize = 12.sp)
+                            Text(
+                                text = "今天",
+                                color = CardWhite.copy(alpha = 0.8f),
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Medium
+                            )
                         } else {
                             Text(
                                 text = "回到今天",
-                                color = CardWhite.copy(alpha = 0.9f),
-                                fontSize = 12.sp,
+                                color = CardWhite.copy(alpha = 0.92f),
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Medium,
                                 textDecoration = TextDecoration.Underline,
                                 modifier = Modifier.clickable { state.goToday() }
                             )
                         }
                     }
                 }
-                RoundNavButton("›", "后一天") { state.nextDay() }
+                CircleIconButton(
+                    icon = AppIcon.ChevronRight,
+                    description = "后一天",
+                    onClick = { state.nextDay() }
+                )
             }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 9.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            Spacer(Modifier.height(12.dp))
             Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(11.dp))
-                    .background(SegBg)
-                    .padding(3.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                TabSegment("采购", state.tab == LedgerTab.BUY, Modifier.weight(1f)) {
-                    state.toggleTab(LedgerTab.BUY)
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(15.dp))
+                        .background(CardWhite.copy(alpha = 0.13f))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    SegmentButton("采购", state.tab == LedgerTab.BUY) {
+                        state.toggleTab(LedgerTab.BUY)
+                    }
+                    SegmentButton("销售", state.tab == LedgerTab.SELL) {
+                        state.toggleTab(LedgerTab.SELL)
+                    }
                 }
-                TabSegment("销售", state.tab == LedgerTab.SELL, Modifier.weight(1f)) {
-                    state.toggleTab(LedgerTab.SELL)
-                }
+                HeaderIconButton(
+                    icon = if (state.privacyMode) AppIcon.EyeOff else AppIcon.Eye,
+                    description = if (state.privacyMode) "关闭隐私模式" else "开启隐私模式",
+                    active = state.privacyMode,
+                    onClick = { state.togglePrivacy() }
+                )
+                HeaderIconButton(
+                    icon = AppIcon.More,
+                    description = "更多",
+                    onClick = { state.openSheet(Sheet.More) }
+                )
             }
-            GearButton(
-                text = if (state.privacyMode) "🙈" else "👁",
-                description = if (state.privacyMode) "关闭隐私模式" else "开启隐私模式",
-                active = state.privacyMode,
-                onClick = { state.togglePrivacy() }
-            )
-            GearButton(
-                text = "⋯",
-                description = "更多",
-                active = false,
-                onClick = { state.openSheet(Sheet.More) }
-            )
         }
     }
 }
 
 @Composable
-private fun RoundNavButton(text: String, description: String, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(38.dp)
-            .clip(CircleShape)
-            .background(CardWhite.copy(alpha = 0.18f))
-            .semantics { contentDescription = description }
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            color = CardWhite,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Light,
-            lineHeight = 24.sp
+private fun HeaderDecoration(modifier: Modifier) {
+    Canvas(modifier) {
+        drawCircle(
+            color = CardWhite.copy(alpha = 0.05f),
+            radius = size.width * 0.34f,
+            center = Offset(size.width * 0.93f, size.height * 0.02f)
+        )
+        drawCircle(
+            color = CardWhite.copy(alpha = 0.035f),
+            radius = size.width * 0.22f,
+            center = Offset(size.width * 0.02f, size.height * 0.92f)
         )
     }
 }
 
 @Composable
-private fun TabSegment(text: String, active: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun RowScope.SegmentButton(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val background by animateColorAsState(
+        targetValue = if (selected) CardWhite else Color.Transparent,
+        animationSpec = tween(180),
+        label = "segmentBackground"
+    )
+    val textColor by animateColorAsState(
+        targetValue = if (selected) PrimaryDark else CardWhite.copy(alpha = 0.82f),
+        animationSpec = tween(180),
+        label = "segmentText"
+    )
     Box(
-        modifier = modifier
-            .then(if (active) Modifier.shadow(1.dp, RoundedCornerShape(9.dp)) else Modifier)
-            .clip(RoundedCornerShape(9.dp))
-            .background(if (active) CardWhite else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .clip(RoundedCornerShape(11.dp))
+            .background(background)
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
-            color = if (active) PrimaryDark else Muted,
+            color = textColor,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold
         )
@@ -272,46 +312,36 @@ private fun TabSegment(text: String, active: Boolean, modifier: Modifier, onClic
 }
 
 @Composable
-private fun GearButton(text: String, description: String, active: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(42.dp)
-            .semantics { contentDescription = description }
-            .shadow(1.dp, RoundedCornerShape(11.dp))
-            .clip(RoundedCornerShape(11.dp))
-            .background(if (active) GoldBg else CardWhite)
-            .then(
-                if (active) Modifier.border(2.dp, Primary.copy(alpha = 0.22f), RoundedCornerShape(11.dp))
-                else Modifier
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text = text, fontSize = 19.sp, color = if (active) Primary else Muted)
-    }
-}
-
-@Composable
 private fun DayRemarkCard(remark: String, onClick: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(13.dp),
+        shape = RoundedCornerShape(18.dp),
         color = CardWhite,
+        border = BorderStroke(1.dp, CardBorder),
         shadowElevation = 1.dp,
         onClick = onClick
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.Top
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("📝", fontSize = 14.sp)
-            Spacer(Modifier.width(7.dp))
+            IconBadge(
+                icon = AppIcon.Note,
+                tint = Primary,
+                background = GoldBg,
+                size = 32.dp,
+                iconSize = 15.dp
+            )
+            Spacer(Modifier.width(10.dp))
             Text(
                 text = remark,
-                color = Color(0xFF7A6A55),
-                fontSize = 13.sp,
-                lineHeight = 19.sp
+                color = TextSoft,
+                fontSize = 12.5.sp,
+                lineHeight = 18.sp,
+                modifier = Modifier.weight(1f)
             )
+            Spacer(Modifier.width(8.dp))
+            AppIconView(AppIcon.ChevronRight, tint = IconMuted, modifier = Modifier.size(14.dp))
         }
     }
 }
@@ -327,6 +357,7 @@ private fun EntryCard(state: LedgerState, entry: LedgerEntry) {
     val final = entryFinal(entry)
     val adjust = round2(final - total)
     val finalLabel = if (isBuy) "实付" else "实收"
+    val itemCount = entry.types.sumOf { it.items.size }
 
     fun money(value: Double): String = if (masked) "****" else fmtMoney(value)
 
@@ -343,70 +374,87 @@ private fun EntryCard(state: LedgerState, entry: LedgerEntry) {
 
     Surface(
         modifier = Modifier.fillMaxWidth().then(gestureModifier),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         color = CardWhite,
         shadowElevation = 2.dp,
-        border = if (state.privacyMode && revealed) {
-            androidx.compose.foundation.BorderStroke(2.dp, Primary.copy(alpha = 0.35f))
-        } else {
-            null
-        }
+        border = BorderStroke(
+            width = if (state.privacyMode && revealed) 1.5.dp else 1.dp,
+            color = if (state.privacyMode && revealed) Primary.copy(alpha = 0.45f) else CardBorder
+        )
     ) {
-        Column(Modifier.padding(start = 13.dp, end = 13.dp, top = 12.dp, bottom = 10.dp)) {
+        Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Avatar(title, isBuy)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = title,
-                        color = TextMain,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    if (!isBuy) {
-                        Spacer(Modifier.width(5.dp))
-                        SettleTag(entry.settled)
+                EntryAvatar(title, isBuy)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = title,
+                            color = TextMain,
+                            fontSize = 16.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (!isBuy) {
+                            Spacer(Modifier.width(6.dp))
+                            SettleTag(entry.settled)
+                        }
                     }
-                    if (state.privacyMode && revealed) {
-                        Spacer(Modifier.width(4.dp))
-                        RevealBadge()
+                    Spacer(Modifier.height(3.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = buildString {
+                                val time = fmtHM(entry.createdAt)
+                                if (time.isNotBlank()) append(time)
+                                if (itemCount > 0) {
+                                    if (isNotEmpty()) append("  ·  ")
+                                    append(itemCount).append(" 笔称重")
+                                } else {
+                                    if (isNotEmpty()) append("  ·  ")
+                                    append("暂无称重")
+                                }
+                            },
+                            color = Muted,
+                            fontSize = 11.sp
+                        )
+                        if (state.privacyMode && revealed) {
+                            Spacer(Modifier.width(6.dp))
+                            RevealBadge()
+                        }
                     }
                 }
-                if (entry.createdAt > 0) {
-                    Text(
-                        text = fmtHM(entry.createdAt),
-                        color = IconMuted,
-                        fontSize = 11.sp
-                    )
-                }
+                Spacer(Modifier.width(6.dp))
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(11.dp))
                         .semantics { contentDescription = "记录菜单" }
-                        .clip(RoundedCornerShape(8.dp))
                         .clickable { state.openSheet(Sheet.EntryMenu(entry.id)) },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("⋮", color = IconMuted, fontSize = 20.sp)
+                    AppIconView(AppIcon.More, tint = IconMuted, modifier = Modifier.size(18.dp))
                 }
             }
 
             if (entry.remark.isNotBlank()) {
-                Spacer(Modifier.height(8.dp))
-                Box(
+                Spacer(Modifier.height(12.dp))
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(9.dp))
-                        .background(SubBg)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(SurfaceSoft)
                         .clickable { state.openSheet(Sheet.EntryRemark(entry.id)) }
-                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.Top
                 ) {
+                    AppIconView(
+                        icon = AppIcon.Note,
+                        tint = IconMuted,
+                        modifier = Modifier.size(13.dp).padding(top = 2.dp)
+                    )
+                    Spacer(Modifier.width(7.dp))
                     Text(
                         text = entry.remark,
                         color = Muted,
@@ -416,153 +464,161 @@ private fun EntryCard(state: LedgerState, entry: LedgerEntry) {
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(14.dp))
+            val accent = if (isBuy) Primary else Green
             if (entry.types.isEmpty()) {
-                Text(
-                    text = "还没有花生类型，先添加一个吧",
-                    color = Placeholder,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(vertical = 6.dp, horizontal = 2.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SurfaceSoft)
+                        .clickable {
+                            if (state.canEditSensitive(entry.id)) {
+                                state.openSheet(Sheet.AddType(entry.id))
+                            }
+                        }
+                        .padding(horizontal = 12.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppIconView(AppIcon.Plus, tint = Primary, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(7.dp))
+                    Text(
+                        text = "还没有花生类型，添加一个开始记账",
+                        color = Brown,
+                        fontSize = 12.5.sp
+                    )
+                }
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    entry.types.forEach { type ->
-                        TypeGroup(
-                            state = state,
-                            entry = entry,
-                            type = type,
-                            masked = masked
-                        )
-                    }
+                entry.types.forEachIndexed { index, type ->
+                    if (index > 0) Spacer(Modifier.height(14.dp))
+                    TypeSection(state, entry, type, masked, accent)
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable {
+                            if (state.canEditSensitive(entry.id)) {
+                                state.openSheet(Sheet.AddType(entry.id))
+                            }
+                        }
+                        .padding(vertical = 11.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppIconView(AppIcon.Plus, tint = Primary, modifier = Modifier.size(12.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "添加花生类型",
+                        color = Primary,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
 
             Spacer(Modifier.height(10.dp))
-            DashedAddButton(
-                text = "+ 添加花生类型",
-                onClick = {
-                    if (state.canEditSensitive(entry.id)) {
-                        state.openSheet(Sheet.AddType(entry.id))
+            ChevronDivider()
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f).padding(top = 2.dp)) {
+                    TinyLabel("合计")
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = money(total),
+                        color = TextSoft,
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable {
+                            if (state.canEditSensitive(entry.id)) {
+                                state.openSheet(Sheet.FinalAmount(entry.id))
+                            }
+                        }
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TinyLabel(finalLabel)
+                        Spacer(Modifier.width(3.dp))
+                        AppIconView(AppIcon.Edit, tint = IconMuted, modifier = Modifier.size(11.dp))
                     }
-                }
-            )
-
-            Spacer(Modifier.height(10.dp))
-            HorizontalDivider(color = Line)
-            Spacer(Modifier.height(9.dp))
-
-            FooterRow("合计", money(total))
-            if (abs(adjust) >= 0.005) {
-                val adjustLabel = when {
-                    adjust > 0 && isBuy -> "多付"
-                    adjust > 0 -> "多收"
-                    isBuy -> "少付"
-                    else -> "少收"
-                }
-                FooterRow(
-                    label = adjustLabel,
-                    value = if (masked) "****" else String.format(java.util.Locale.US, "%.2f", abs(adjust)),
-                    valueColor = Primary
-                )
-            }
-            Spacer(Modifier.height(2.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable {
-                        if (state.canEditSensitive(entry.id)) {
-                            state.openSheet(Sheet.FinalAmount(entry.id))
+                    Spacer(Modifier.height(1.dp))
+                    Text(
+                        text = money(final),
+                        color = if (masked) Placeholder else Primary,
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (abs(adjust) >= 0.005) {
+                        Spacer(Modifier.height(4.dp))
+                        val adjustLabel = when {
+                            adjust > 0 && isBuy -> "多付"
+                            adjust > 0 -> "多收"
+                            isBuy -> "少付"
+                            else -> "少收"
+                        }
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(GoldBg)
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = adjustLabel,
+                                color = PrimaryDark,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(Modifier.width(3.dp))
+                            Text(
+                                text = if (masked) "****" else String.format(
+                                    Locale.US,
+                                    "%.2f",
+                                    abs(adjust)
+                                ),
+                                color = Primary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
-                    .padding(horizontal = 2.dp, vertical = 5.dp),
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Text(
-                    text = finalLabel,
-                    color = Muted,
-                    fontSize = 14.sp,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    text = "✎",
-                    color = IconMuted,
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(end = 4.dp, bottom = 2.dp)
-                )
-                Text(
-                    text = money(final),
-                    color = if (masked) Placeholder else Primary,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun CalendarGlyph(modifier: Modifier = Modifier) {
-    Canvas(modifier) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.4.dp.toPx()
-        val color = CardWhite.copy(alpha = 0.92f)
-        val top = h * 0.18f
-        val bodyHeight = h - top - 0.5f
-        drawRoundRect(
-            color = color,
-            topLeft = Offset(0.5f, top),
-            size = Size(w - 1f, bodyHeight),
-            cornerRadius = CornerRadius(3.dp.toPx()),
-            style = Stroke(width = stroke)
-        )
-        drawLine(
-            color = color,
-            start = Offset(0.5f, top + bodyHeight * 0.3f),
-            end = Offset(w - 0.5f, top + bodyHeight * 0.3f),
-            strokeWidth = stroke
-        )
-        drawLine(
-            color = color,
-            start = Offset(w * 0.3f, 0f),
-            end = Offset(w * 0.3f, top + stroke),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
-        )
-        drawLine(
-            color = color,
-            start = Offset(w * 0.7f, 0f),
-            end = Offset(w * 0.7f, top + stroke),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round
-        )
-        val dotY = top + bodyHeight * 0.66f
-        drawCircle(color, radius = 1.1.dp.toPx(), center = Offset(w * 0.34f, dotY))
-        drawCircle(color, radius = 1.1.dp.toPx(), center = Offset(w * 0.62f, dotY))
-    }
-}
-
-@Composable
-private fun Avatar(title: String, isBuy: Boolean) {
+private fun EntryAvatar(title: String, isBuy: Boolean) {
     Box(
         modifier = Modifier
-            .size(26.dp)
-            .clip(CircleShape)
+            .size(40.dp)
+            .clip(RoundedCornerShape(13.dp))
             .background(
                 if (isBuy) {
-                    Brush.linearGradient(listOf(Color(0xFFF0C08A), Color(0xFFD08C46)))
+                    Brush.linearGradient(listOf(Color(0xFFE7B77B), Color(0xFFC9853B)))
                 } else {
-                    Brush.linearGradient(listOf(Color(0xFF9FD3B4), Color(0xFF4C9A6E)))
+                    Brush.linearGradient(listOf(Color(0xFFA9CDB8), Color(0xFF5F9374)))
                 }
             ),
         contentAlignment = Alignment.Center
     ) {
+        val initial = when {
+            title.startsWith("户") && title.length > 1 -> title.substring(1).take(2)
+            else -> title.take(1)
+        }.ifBlank { "?" }
         Text(
-            text = title.take(1).ifBlank { "?" },
+            text = initial,
             color = CardWhite,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold
         )
     }
 }
@@ -571,9 +627,9 @@ private fun Avatar(title: String, isBuy: Boolean) {
 private fun SettleTag(settled: Boolean) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(5.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(if (settled) GreenBg else RedBg)
-            .padding(horizontal = 6.dp, vertical = 1.dp)
+            .padding(horizontal = 6.dp, vertical = 2.dp)
     ) {
         Text(
             text = if (settled) "已结清" else "赊账",
@@ -586,41 +642,39 @@ private fun SettleTag(settled: Boolean) {
 
 @Composable
 private fun RevealBadge() {
-    Box(
+    Row(
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
             .background(GoldBg)
-            .padding(horizontal = 6.dp, vertical = 1.dp)
+            .padding(horizontal = 5.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("👁 已显示", color = Primary, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold)
+        AppIconView(AppIcon.Eye, tint = Primary, modifier = Modifier.size(10.dp))
+        Spacer(Modifier.width(3.dp))
+        Text("已显示", color = Primary, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
 @Composable
-private fun TypeGroup(
+private fun TypeSection(
     state: LedgerState,
     entry: LedgerEntry,
     type: LedgerType,
-    masked: Boolean
+    masked: Boolean,
+    accent: Color
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(SubBg)
-            .padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 6.dp)
-    ) {
+    Column(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFD08C46))
+                    .size(width = 3.dp, height = 14.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(accent)
             )
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(8.dp))
             Text(
                 text = type.name,
-                color = Brown,
+                color = TextSoft,
                 fontSize = 13.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -628,19 +682,19 @@ private fun TypeGroup(
             )
             Text(
                 text = if (masked) "****" else fmtMoney(typeSubtotal(type)),
-                color = Color(0xFFB08954),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
+                color = Brown,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Bold
             )
         }
-        Spacer(Modifier.height(2.dp))
+        Spacer(Modifier.height(4.dp))
         type.items.forEachIndexed { index, item ->
-            val manual = item.manualAmount != null
+            if (index > 0) ChevronDivider()
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { state.openItemForm(entry.id, type.id, item.id) }
-                    .padding(vertical = 9.dp),
+                    .padding(vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
@@ -653,152 +707,171 @@ private fun TypeGroup(
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.SemiBold
                     )
-                    UnitText("斤")
-                    Text(" × ", color = Placeholder, fontSize = 10.sp)
+                    UnitText(" 斤")
+                    Text("  ×  ", color = Placeholder, fontSize = 10.sp)
                     Text(
                         text = if (masked) "****" else fmtNum(item.price),
                         color = TextSoft,
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.SemiBold
                     )
-                    UnitText("元")
-                    if (manual && !masked) {
-                        Spacer(Modifier.width(4.dp))
+                    UnitText(" 元")
+                    if (item.manualAmount != null && !masked) {
+                        Spacer(Modifier.width(5.dp))
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(5.dp))
                                 .background(TagBg)
                                 .padding(horizontal = 5.dp, vertical = 1.dp)
                         ) {
-                            Text("改", color = Amber, fontSize = 10.sp)
+                            Text("改", color = Brown, fontSize = 9.5.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
                 Text(
                     text = if (masked) "****" else fmtMoney(itemAmount(item)),
                     color = TextMain,
-                    fontSize = 14.5.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
-            if (index != type.items.lastIndex) {
-                DashedDivider()
-            }
         }
-        DashedAddButton(
-            text = "+ 新增称",
-            modifier = Modifier.padding(top = 6.dp),
-            onClick = { state.openItemForm(entry.id, type.id, null) }
-        )
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { state.openItemForm(entry.id, type.id, null) }
+                .padding(vertical = 9.dp, horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AppIconView(AppIcon.Plus, tint = Primary, modifier = Modifier.size(12.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("新增称", color = Primary, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
+        }
     }
 }
 
 @Composable
 private fun UnitText(text: String) {
-    Text(text = text, color = Color(0xFFA2988A), fontSize = 11.sp)
-}
-
-@Composable
-private fun DashedDivider() {
-    Canvas(Modifier.fillMaxWidth().height(1.dp)) {
-        drawLine(
-            color = Color(0xFFEFE3D0),
-            start = Offset(0f, 0f),
-            end = Offset(size.width, 0f),
-            strokeWidth = 1.dp.toPx(),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))
-        )
-    }
-}
-
-@Composable
-private fun FooterRow(label: String, value: String, valueColor: Color = TextSoft) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, color = Muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
-        Text(value, color = valueColor, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-    }
+    Text(text = text, color = MutedLight, fontSize = 10.5.sp)
 }
 
 @Composable
 private fun EmptyState(tab: LedgerTab) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 56.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 64.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = if (tab == LedgerTab.BUY) "🥜" else "🧾",
-            fontSize = 46.sp,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(88.dp)
+                .clip(CircleShape)
+                .background(if (tab == LedgerTab.BUY) GoldBg else GreenBg),
+            contentAlignment = Alignment.Center
+        ) {
+            if (tab == LedgerTab.BUY) {
+                PeanutMark(
+                    tint = Primary.copy(alpha = 0.82f),
+                    detailTint = GoldBg.copy(alpha = 0.92f),
+                    modifier = Modifier.size(48.dp)
+                )
+            } else {
+                AppIconView(
+                    icon = AppIcon.Note,
+                    tint = Green.copy(alpha = 0.75f),
+                    modifier = Modifier.size(40.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(18.dp))
         Text(
             text = if (tab == LedgerTab.BUY) "这一天还没有采购记录" else "这一天还没有销售记录",
-            color = Color(0xFFB7AC9E),
-            fontSize = 14.sp,
+            color = TextSoft,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center
         )
+        Spacer(Modifier.height(6.dp))
         Text(
-            text = if (tab == LedgerTab.BUY) "点击下方「新增农户」开始记账" else "点击下方「新增收购」开始记账",
-            color = Placeholder,
+            text = if (tab == LedgerTab.BUY) "点击下方「新增农户」记下第一笔" else "点击下方「新增收购」记下第一笔",
+            color = Muted,
             fontSize = 12.5.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 4.dp)
+            textAlign = TextAlign.Center
         )
     }
 }
 
 @Composable
-private fun BottomBar(state: LedgerState, stats: DayStats, modifier: Modifier = Modifier) {
+private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier = Modifier) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .padding(horizontal = 12.dp)
+            .navigationBarsPadding()
+            .padding(bottom = 8.dp),
+        shape = RoundedCornerShape(22.dp),
         color = CardWhite,
+        border = BorderStroke(1.dp, CardBorder),
         shadowElevation = 10.dp
     ) {
-        Column {
-            HorizontalDivider(color = Line)
-            Row(
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = if (state.currentDate == LocalDate.now()) "今日收支" else "当日收支",
+                    color = Muted,
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.6.sp
+                )
+                Spacer(Modifier.height(1.dp))
+                Text(
+                    text = if (state.privacyMode) "****" else fmtSigned(stats.profit),
+                    color = when {
+                        state.privacyMode -> Placeholder
+                        stats.profit >= 0 -> Primary
+                        else -> Green
+                    },
+                    fontSize = 21.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+                Spacer(Modifier.height(1.dp))
+                Text(
+                    text = if (state.privacyMode) {
+                        "采购 ****  ·  销售 ****"
+                    } else {
+                        "采购 ${fmtMoney(stats.buy)}  ·  销售 ${fmtMoney(stats.sell)}"
+                    },
+                    color = Muted,
+                    fontSize = 10.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 14.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    .shadow(5.dp, RoundedCornerShape(15.dp))
+                    .clip(RoundedCornerShape(15.dp))
+                    .background(TopGradient)
+                    .clickable { state.openSheet(Sheet.AddEntry) }
+                    .padding(horizontal = 14.dp, vertical = 11.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text("今日收支", color = Muted, fontSize = 11.sp)
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = if (state.privacyMode) "****" else fmtSigned(stats.profit),
-                            color = when {
-                                state.privacyMode -> IconMuted
-                                stats.profit >= 0 -> Primary
-                                else -> Green
-                            },
-                            fontSize = 19.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1
-                        )
-                    }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppIconView(AppIcon.Plus, tint = CardWhite, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(5.dp))
                     Text(
-                        text = if (state.privacyMode) {
-                            "采购 **** · 销售 ****"
-                        } else {
-                            "采购 ${fmtMoney(stats.buy)} · 销售 ${fmtMoney(stats.sell)}"
-                        },
-                        color = Muted,
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = if (state.tab == LedgerTab.BUY) "新增农户" else "新增收购",
+                        color = CardWhite,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
                     )
                 }
-                PrimaryButton(
-                    text = if (state.tab == LedgerTab.BUY) "+ 新增农户" else "+ 新增收购",
-                    onClick = { state.openSheet(Sheet.AddEntry) },
-                    modifier = Modifier.shadow(4.dp, RoundedCornerShape(11.dp))
-                )
             }
         }
     }

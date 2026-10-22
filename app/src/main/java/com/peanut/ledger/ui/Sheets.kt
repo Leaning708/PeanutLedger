@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,7 +15,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,10 +29,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -60,16 +63,23 @@ import com.peanut.ledger.data.fmtNum
 import com.peanut.ledger.data.itemAmount
 import com.peanut.ledger.data.nextRoundUp
 import com.peanut.ledger.data.round2
+import com.peanut.ledger.ui.theme.CardBorder
 import com.peanut.ledger.ui.theme.CardWhite
 import com.peanut.ledger.ui.theme.FieldBg
 import com.peanut.ledger.ui.theme.FieldBorder
+import com.peanut.ledger.ui.theme.GoldBg
+import com.peanut.ledger.ui.theme.Line
 import com.peanut.ledger.ui.theme.Muted
 import com.peanut.ledger.ui.theme.Placeholder
 import com.peanut.ledger.ui.theme.Primary
 import com.peanut.ledger.ui.theme.PrimaryDark
-import com.peanut.ledger.ui.theme.SubBg
+import com.peanut.ledger.ui.theme.Red
+import com.peanut.ledger.ui.theme.RedBg
+import com.peanut.ledger.ui.theme.SurfaceSoft
 import com.peanut.ledger.ui.theme.TextMain
+import com.peanut.ledger.ui.theme.TextSoft
 import kotlinx.coroutines.delay
+import java.time.LocalDate
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.floor
@@ -79,11 +89,11 @@ fun SheetHost(state: LedgerState) {
     val sheet = state.sheet ?: return
     BackHandler { state.closeSheet() }
     BoxWithConstraints(Modifier.fillMaxSize().zIndex(55f)) {
-        val maxSheetHeight = maxHeight * 0.88f
+        val maxSheetHeight = maxHeight * 0.9f
         var appeared by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { appeared = true }
         val scrimAlpha by animateFloatAsState(
-            targetValue = if (appeared) 0.42f else 0f,
+            targetValue = if (appeared) 0.4f else 0f,
             animationSpec = tween(240),
             label = "sheetScrim"
         )
@@ -105,15 +115,21 @@ fun SheetHost(state: LedgerState) {
                     .fillMaxWidth()
                     .heightIn(max = maxSheetHeight)
                     .imePadding(),
-                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-                color = CardWhite
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                color = CardWhite,
+                shadowElevation = 24.dp
             ) {
                 Column(
                     Modifier
                         .verticalScroll(rememberScrollState())
                         .navigationBarsPadding()
-                        .padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 18.dp)
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 10.dp, bottom = 22.dp)
                 ) {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        SheetHandle()
+                    }
+                    Spacer(Modifier.height(16.dp))
                     SheetContent(state, sheet)
                 }
             }
@@ -139,19 +155,7 @@ private fun SheetContent(state: LedgerState, sheet: Sheet) {
 }
 
 @Composable
-internal fun SheetTitle(text: String) {
-    Text(
-        text = text,
-        color = TextMain,
-        fontSize = 17.sp,
-        fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)
-    )
-}
-
-@Composable
-private fun SheetActionRow(content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+private fun SheetActionRow(content: @Composable RowScope.() -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -163,41 +167,51 @@ private fun SheetActionRow(content: @Composable androidx.compose.foundation.layo
 @Composable
 private fun MoreSheet(state: LedgerState) {
     val hasRemark = state.currentDay.remark.isNotBlank()
+    val remarkLabel = if (state.currentDate == LocalDate.now()) "今日备注" else "当日备注"
     Column {
-        SheetTitle("更多")
+        SheetTitle("更多", "备注、隐私与偏好设置")
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SheetActionItem(
-                text = if (hasRemark) "编辑备注" else "添加备注",
-                leading = "📝",
+                text = if (hasRemark) "编辑$remarkLabel" else "添加$remarkLabel",
+                icon = AppIcon.Note,
                 onClick = { state.openSheet(Sheet.DayRemark) }
             )
             SheetActionItem(
-                text = "设置",
-                leading = "⚙",
-                onClick = { state.openSettings() }
-            )
-            SheetActionItem(
                 text = if (state.privacyMode) "关闭隐私模式" else "开启隐私模式",
-                leading = "👁",
+                icon = if (state.privacyMode) AppIcon.EyeOff else AppIcon.Eye,
                 onClick = { state.togglePrivacy() }
             )
+            SheetActionItem(
+                text = "类型与收购方设置",
+                icon = AppIcon.Settings,
+                onClick = { state.openSettings() }
+            )
         }
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = "隐私模式下，双击或长按卡片可临时显示金额",
-            color = Placeholder,
-            fontSize = 12.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "数据仅保存在本机，无需登录",
-            color = Placeholder,
-            fontSize = 12.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
+        Spacer(Modifier.height(16.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(SurfaceSoft)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "隐私模式下，双击或长按卡片可临时显示金额",
+                    color = Muted,
+                    fontSize = 11.5.sp,
+                    lineHeight = 17.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = "数据仅保存在本机，无需登录",
+                    color = Placeholder,
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
         Spacer(Modifier.height(14.dp))
         GhostButton("关闭", { state.closeSheet() }, Modifier.fillMaxWidth())
     }
@@ -221,7 +235,7 @@ private fun AddFarmerSheet(state: LedgerState) {
         focusRequester.requestFocus()
     }
     Column {
-        SheetTitle("新增农户")
+        SheetTitle("新增农户", "只记录名称，稍后添加花生类型和称重")
         FieldLabel("农户名称")
         LedgerTextField(
             value = name,
@@ -229,7 +243,7 @@ private fun AddFarmerSheet(state: LedgerState) {
             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
             placeholder = "输入农户名称"
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(20.dp))
         SheetActionRow {
             GhostButton("取消", { state.closeSheet() }, Modifier.weight(1f))
             PrimaryButton(
@@ -249,7 +263,7 @@ private fun AddBuyerEntrySheet(state: LedgerState) {
     var menuExpanded by remember { mutableStateOf(false) }
 
     Column {
-        SheetTitle("新增收购记录")
+        SheetTitle("新增收购记录", "选择收购方，稍后添加花生类型和称重")
         FieldLabel("收购方")
         BuyerSelector(
             state = state,
@@ -267,7 +281,7 @@ private fun AddBuyerEntrySheet(state: LedgerState) {
             }
         )
         if (showNewBuyer) {
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
             FieldLabel("新收购方名称")
             LedgerTextField(
                 value = newBuyerName,
@@ -276,7 +290,7 @@ private fun AddBuyerEntrySheet(state: LedgerState) {
                 placeholder = "输入收购方名称"
             )
         }
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(20.dp))
         SheetActionRow {
             GhostButton("取消", { state.closeSheet() }, Modifier.weight(1f))
             PrimaryButton(
@@ -311,51 +325,78 @@ private fun BuyerSelector(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(11.dp))
+                .clip(RoundedCornerShape(14.dp))
                 .background(FieldBg)
-                .border(1.dp, FieldBorder, RoundedCornerShape(11.dp))
+                .border(1.dp, FieldBorder, RoundedCornerShape(14.dp))
                 .clickable { onExpandedChange(true) }
-                .padding(horizontal = 12.dp, vertical = 14.dp),
+                .padding(horizontal = 14.dp, vertical = 15.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = selected.ifBlank { "请选择收购方" },
                 color = if (selected.isBlank()) Placeholder else TextMain,
                 fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            Text("▾", color = Placeholder, fontSize = 14.sp)
+            AppIconView(
+                icon = AppIcon.ChevronDown,
+                tint = Placeholder,
+                modifier = Modifier.size(15.dp)
+            )
         }
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { onExpandedChange(false) },
-            modifier = Modifier.width(260.dp),
-            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.width(280.dp),
+            shape = RoundedCornerShape(16.dp),
             containerColor = CardWhite,
             tonalElevation = 0.dp,
-            shadowElevation = 8.dp,
-            border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorder)
+            shadowElevation = 10.dp,
+            border = BorderStroke(1.dp, CardBorder)
         ) {
             state.settings.buyers.forEach { buyer ->
-                Box(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onPick(buyer) }
-                        .padding(horizontal = 16.dp, vertical = 13.dp)
+                        .padding(horizontal = 16.dp, vertical = 13.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(buyer, fontSize = 15.sp, color = TextMain)
+                    Box(
+                        Modifier
+                            .size(26.dp)
+                            .clip(CircleShape)
+                            .background(SurfaceSoft),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            buyer.take(1),
+                            color = Primary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(buyer, fontSize = 15.sp, color = TextMain, modifier = Modifier.weight(1f))
+                    if (buyer == selected) {
+                        AppIconView(AppIcon.Check, tint = Primary, modifier = Modifier.size(15.dp))
+                    }
                 }
             }
-            androidx.compose.material3.HorizontalDivider(color = com.peanut.ledger.ui.theme.Line)
-            Box(
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onPickNew)
-                    .padding(horizontal = 16.dp, vertical = 13.dp)
+                    .padding(horizontal = 16.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("＋ 新增收购方...", fontSize = 15.sp, color = Primary)
+                AppIconView(AppIcon.Plus, tint = Primary, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(11.dp))
+                Text("新增收购方", fontSize = 15.sp, color = Primary, fontWeight = FontWeight.Medium)
             }
         }
     }
@@ -370,35 +411,36 @@ private fun AddTypeSheet(state: LedgerState, entryId: String) {
     }
     var customName by remember { mutableStateOf("") }
     Column {
-        SheetTitle("选择花生类型")
+        SheetTitle("选择花生类型", "选择预设，或输入一个新的类型")
         if (presets.isEmpty()) {
             Text(
                 text = "还没有预设类型，可在设置中添加",
                 color = Placeholder,
                 fontSize = 12.5.sp,
-                modifier = Modifier.padding(bottom = 12.dp)
+                modifier = Modifier.padding(bottom = 14.dp)
             )
         } else {
-            androidx.compose.foundation.layout.FlowRow(
+            FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)
+                modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp)
             ) {
                 presets.forEach { name ->
-                    PillChip(text = name, onClick = {
-                        state.addTypeAndOpen(entryId, name, saveAsPreset = false)
-                    })
+                    PillChip(
+                        text = name,
+                        onClick = { state.addTypeAndOpen(entryId, name, saveAsPreset = false) }
+                    )
                 }
             }
         }
-        FieldLabel("或自定义类型")
+        FieldLabel("自定义类型")
         LedgerTextField(
             value = customName,
             onValueChange = { customName = it },
             modifier = Modifier.fillMaxWidth(),
             placeholder = "输入类型名称"
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(20.dp))
         SheetActionRow {
             GhostButton("取消", { state.closeSheet() }, Modifier.weight(1f))
             PrimaryButton(
@@ -464,7 +506,10 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
     }
 
     Column {
-        SheetTitle(if (isEdit) "编辑称 · ${type.name}" else "新增称 · ${type.name}")
+        SheetTitle(
+            text = if (isEdit) "编辑称" else "新增称",
+            subtitle = "${type.name} · 输入重量和单价，金额自动计算"
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
                 FieldLabel("重量（斤）")
@@ -494,22 +539,41 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
             }
         }
         if (!isEdit && lastPrice != null) {
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = "上次单价 ¥${String.format(Locale.US, "%.2f", round2(lastPrice))}",
-                color = Color(0xFFC08A3E),
-                fontSize = 11.5.sp
-            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(SurfaceSoft)
+                    .padding(horizontal = 9.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AppIconView(AppIcon.Tag, tint = Primary, modifier = Modifier.size(11.dp))
+                Spacer(Modifier.width(5.dp))
+                Text(
+                    text = "上次单价 ¥${String.format(Locale.US, "%.2f", round2(lastPrice))}",
+                    color = PrimaryDark,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(16.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             FieldLabel("金额（元）", Modifier.weight(1f))
-            Text(
-                text = if (manual) "手动修改" else "自动计算",
-                color = if (manual) Color(0xFFC08A3E) else Muted,
-                fontSize = 11.5.sp,
-                modifier = Modifier.padding(bottom = 6.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (manual) GoldBg else SurfaceSoft)
+                    .padding(horizontal = 7.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = if (manual) "手动修改" else "自动计算",
+                    color = if (manual) PrimaryDark else Muted,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Spacer(Modifier.height(7.dp))
         }
         LedgerTextField(
             value = amountText,
@@ -527,7 +591,7 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
             keyboardType = KeyboardType.Decimal,
             isManual = manual
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(22.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -563,16 +627,18 @@ private fun EntryMenuSheet(state: LedgerState, entryId: String) {
     val entry = state.findEntry(entryId) ?: return
     val isBuy = state.tab == LedgerTab.BUY
     Column {
-        SheetTitle(entry.title(state.tab))
+        SheetTitle(entry.title(state.tab), "选择要进行的操作")
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!isBuy) {
                 SheetActionItem(
                     text = if (entry.settled) "标记为赊账" else "标记为已结清",
+                    icon = AppIcon.Check,
                     onClick = { state.toggleSettled(entryId) }
                 )
             }
             SheetActionItem(
-                text = "修改${if (isBuy) "实付" else "实收"}",
+                text = "修改${if (isBuy) "实付" else "实收"}金额",
+                icon = AppIcon.Cash,
                 onClick = {
                     if (state.canEditSensitive(entryId)) {
                         state.openSheet(Sheet.FinalAmount(entryId))
@@ -581,19 +647,22 @@ private fun EntryMenuSheet(state: LedgerState, entryId: String) {
             )
             SheetActionItem(
                 text = if (entry.remark.isNotBlank()) "编辑备注" else "添加备注",
+                icon = AppIcon.Note,
                 onClick = { state.openSheet(Sheet.EntryRemark(entryId)) }
             )
             SheetActionItem(
                 text = "重命名${if (isBuy) "农户" else "收购方"}",
+                icon = AppIcon.Tag,
                 onClick = { state.openSheet(Sheet.RenameEntry(entryId)) }
             )
             SheetActionItem(
-                text = "删除",
+                text = "删除这条记录",
+                icon = AppIcon.Trash,
                 danger = true,
                 onClick = { state.deleteEntry(entryId) }
             )
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
         GhostButton("取消", { state.closeSheet() }, Modifier.fillMaxWidth())
     }
 }
@@ -616,7 +685,7 @@ private fun RenameEntrySheet(state: LedgerState, entryId: String) {
             onValueChange = { name = it },
             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester)
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(20.dp))
         SheetActionRow {
             GhostButton("取消", { state.closeSheet() }, Modifier.weight(1f))
             PrimaryButton(
@@ -646,7 +715,7 @@ private fun EntryRemarkSheet(state: LedgerState, entryId: String) {
             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
             placeholder = "输入备注"
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(20.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -686,7 +755,7 @@ private fun DayRemarkSheet(state: LedgerState) {
             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
             placeholder = "例如：下雨，只收半天"
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(20.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -727,33 +796,32 @@ private fun FinalAmountSheet(state: LedgerState, entryId: String) {
     val cents = round2(total - floorValue)
 
     Column {
-        SheetTitle("修改$finalLabel")
-        Text(
-            text = "$totalLabel ${fmtMoney(total)}",
-            color = Muted,
-            fontSize = 13.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(12.dp))
-        androidx.compose.foundation.layout.FlowRow(
+        SheetTitle("修改$finalLabel", "$totalLabel ${fmtMoney(total)}")
+        FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)
+            modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp)
         ) {
             if (cents > 0.005) {
-                PillChip(text = "抹零至 $floorValue", onClick = {
-                    amountText = String.format(Locale.US, "%.2f", floorValue.toDouble())
-                })
+                PillChip(
+                    text = "抹零至 $floorValue",
+                    onClick = {
+                        amountText = String.format(Locale.US, "%.2f", floorValue.toDouble())
+                    }
+                )
             }
             if (suggestion != null) {
-                PillChip(text = suggestion.label, onClick = {
-                    amountText = String.format(Locale.US, "%.2f", suggestion.value)
-                })
+                PillChip(
+                    text = suggestion.label,
+                    onClick = {
+                        amountText = String.format(Locale.US, "%.2f", suggestion.value)
+                    }
+                )
             }
-            PillChip(text = "恢复原价", onClick = {
-                amountText = String.format(Locale.US, "%.2f", total)
-            })
+            PillChip(
+                text = "恢复原价",
+                onClick = { amountText = String.format(Locale.US, "%.2f", total) }
+            )
         }
         FieldLabel("$finalLabel（元）")
         LedgerTextField(
@@ -762,14 +830,21 @@ private fun FinalAmountSheet(state: LedgerState, entryId: String) {
             modifier = Modifier.fillMaxWidth(),
             keyboardType = KeyboardType.Decimal
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(12.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (abs(diff) < 0.005) {
-                Text("未调整", color = Muted, fontSize = 13.sp)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(SurfaceSoft)
+                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                ) {
+                    Text("金额未调整", color = Muted, fontSize = 12.sp)
+                }
             } else {
                 val label = when {
                     diff > 0 && isBuy -> "多付"
@@ -777,16 +852,24 @@ private fun FinalAmountSheet(state: LedgerState, entryId: String) {
                     isBuy -> "少付"
                     else -> "少收"
                 }
-                Text("$label ", color = Muted, fontSize = 13.sp)
-                Text(
-                    text = String.format(Locale.US, "%.2f", abs(diff)),
-                    color = Primary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(GoldBg)
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("$label ", color = Muted, fontSize = 12.sp)
+                    Text(
+                        text = String.format(Locale.US, "%.2f", abs(diff)),
+                        color = Primary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(20.dp))
         SheetActionRow {
             GhostButton("取消", { state.closeSheet() }, Modifier.weight(1f))
             PrimaryButton(
@@ -808,18 +891,43 @@ private fun FinalAmountSheet(state: LedgerState, entryId: String) {
 @Composable
 private fun ConfirmSheet(state: LedgerState, sheet: Sheet.Confirm) {
     Column {
-        SheetTitle(sheet.title)
+        Spacer(Modifier.height(4.dp))
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .size(58.dp)
+                    .clip(CircleShape)
+                    .background(if (sheet.destructive) RedBg else GoldBg),
+                contentAlignment = Alignment.Center
+            ) {
+                AppIconView(
+                    icon = if (sheet.destructive) AppIcon.Trash else AppIcon.Check,
+                    tint = if (sheet.destructive) Red else Primary,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        Text(
+            text = sheet.title,
+            color = TextMain,
+            fontSize = 19.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
         if (sheet.message.isNotBlank()) {
+            Spacer(Modifier.height(7.dp))
             Text(
                 text = sheet.message,
                 color = Muted,
                 fontSize = 13.sp,
                 lineHeight = 20.sp,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
+                modifier = Modifier.fillMaxWidth()
             )
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(22.dp))
         SheetActionRow {
             GhostButton("取消", { state.closeSheet() }, Modifier.weight(1f))
             if (sheet.destructive) {
