@@ -5,15 +5,13 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 object LedgerRepository {
-    const val CURRENT_SCHEMA_VERSION = 2
+    const val CURRENT_SCHEMA_VERSION = 1
     private const val PREFS_NAME = "peanut_ledger"
-    private const val DATA_KEY = "ledger_data_v2"
-    private const val LEGACY_DATA_KEY = "ledger_data_v1"
+    private const val DATA_KEY = "ledger_data_v1"
 
     fun load(context: Context): LedgerData {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val raw = prefs.getString(DATA_KEY, null)
-            ?: prefs.getString(LEGACY_DATA_KEY, null)
             ?: return initialData().also { save(context, it) }
         return runCatching { decode(JSONObject(raw)) }
             .getOrElse {
@@ -26,7 +24,6 @@ object LedgerRepository {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(DATA_KEY, encode(data).toString())
-            .remove(LEGACY_DATA_KEY)
             .apply()
     }
 
@@ -140,15 +137,15 @@ object LedgerRepository {
         val fallback = LedgerSettings()
         if (obj == null) return fallback
         return LedgerSettings(
-            purchaseTypes = when {
-                obj.has("purchaseTypes") -> obj.optJSONArray("purchaseTypes").namedOptionList()
-                obj.has("buyTypes") -> obj.optJSONArray("buyTypes").namedOptionList()
-                else -> fallback.purchaseTypes
+            purchaseTypes = if (obj.has("purchaseTypes")) {
+                obj.optJSONArray("purchaseTypes").namedOptionList()
+            } else {
+                fallback.purchaseTypes
             },
-            saleTypes = when {
-                obj.has("saleTypes") -> obj.optJSONArray("saleTypes").namedOptionList()
-                obj.has("sellTypes") -> obj.optJSONArray("sellTypes").namedOptionList()
-                else -> fallback.saleTypes
+            saleTypes = if (obj.has("saleTypes")) {
+                obj.optJSONArray("saleTypes").namedOptionList()
+            } else {
+                fallback.saleTypes
             },
             buyers = if (obj.has("buyers")) obj.optJSONArray("buyers").namedOptionList() else fallback.buyers,
             privacyMode = obj.optBoolean("privacyMode", false),
@@ -160,17 +157,15 @@ object LedgerRepository {
     }
 
     private fun parseDay(obj: JSONObject): DayData = DayData(
-        purchases = (obj.optJSONArray("purchases") ?: obj.optJSONArray("buys"))
-            .entryList { parseEntry(it) },
-        sales = (obj.optJSONArray("sales") ?: obj.optJSONArray("sells"))
-            .entryList { parseEntry(it) },
+        purchases = obj.optJSONArray("purchases").entryList { parseEntry(it) },
+        sales = obj.optJSONArray("sales").entryList { parseEntry(it) },
         remark = obj.optString("remark", "")
     )
 
     private fun parseEntry(obj: JSONObject): LedgerEntry = LedgerEntry(
         id = obj.optString("id", newId()),
-        supplierName = obj.optString("supplier", obj.optString("name", "")),
-        buyerName = obj.optString("buyerName", obj.optString("buyer", "")),
+        supplierName = obj.optString("supplier", ""),
+        buyerName = obj.optString("buyerName", ""),
         remark = obj.optString("remark", ""),
         settled = obj.optBoolean("settled", false),
         adjust = obj.optDouble("adjust", 0.0),

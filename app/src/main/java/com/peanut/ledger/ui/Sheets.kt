@@ -701,11 +701,8 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
     val lastPrice = remember(sheet.formKey) {
         if (!isEdit) state.findLastPrice(sheet.entryId, sheet.typeId) else null
     }
-    val focusRequester = remember(sheet.formKey) { FocusRequester() }
-    LaunchedEffect(sheet.formKey) {
-        delay(320)
-        focusRequester.requestFocus()
-    }
+    val priceFocusRequester = remember(sheet.formKey) { FocusRequester() }
+    val weightFocusRequester = remember(sheet.formKey) { FocusRequester() }
 
     fun autoAmount(weightText: String, priceText: String): String {
         val value = round2(
@@ -724,6 +721,11 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
                 ?: lastPrice?.let { fmtNum(it) }
                 ?: ""
         )
+    }
+    LaunchedEffect(sheet.formKey) {
+        delay(320)
+        val target = if (priceText.isBlank()) priceFocusRequester else weightFocusRequester
+        target.requestFocus()
     }
     val initialAuto = item?.let { itemAutoAmount(it) } ?: 0.0
     val initialManual = item?.manualAmount?.takeIf {
@@ -779,7 +781,7 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
                         amountManual = false
                         amountText = ""
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().focusRequester(priceFocusRequester),
                     placeholder = "0",
                     keyboardType = KeyboardType.Decimal
                 )
@@ -793,7 +795,7 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
                         amountManual = false
                         amountText = ""
                     },
-                    modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+                    modifier = Modifier.fillMaxWidth().focusRequester(weightFocusRequester),
                     placeholder = "0",
                     keyboardType = KeyboardType.Decimal
                 )

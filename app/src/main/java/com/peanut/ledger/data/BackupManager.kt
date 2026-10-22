@@ -58,8 +58,7 @@ data class BackupInfo(
 sealed interface RestoreCheck {
     data class Ready(
         val info: BackupInfo,
-        val data: LedgerData,
-        val migrated: Boolean
+        val data: LedgerData
     ) : RestoreCheck
 
     data class Invalid(val message: String) : RestoreCheck
@@ -281,18 +280,13 @@ class BackupManager(private val context: Context) {
             )
         }
         val dataRoot = root.optJSONObject("data")
-            ?: if (root.has("days") || root.has("settings")) root else null
             ?: return RestoreCheck.Invalid("备份文件缺少账本数据")
         val data = runCatching {
-            LedgerRepository.decode(migrate(dataRoot, schemaVersion))
+            LedgerRepository.decode(dataRoot)
         }.getOrElse {
             return RestoreCheck.Invalid("备份数据读取失败，可能已损坏")
         }
-        return RestoreCheck.Ready(
-            info = info,
-            data = data,
-            migrated = schemaVersion < CURRENT_SCHEMA_VERSION || appVersionCode < currentAppVersionCode()
-        )
+        return RestoreCheck.Ready(info = info, data = data)
     }
 
     private fun readInfo(file: File, root: JSONObject? = null): BackupInfo? {
@@ -318,16 +312,6 @@ class BackupManager(private val context: Context) {
             sizeBytes = file.length(),
             issue = issue
         )
-    }
-
-    /** Place for future schema migrations; old payloads are parsed with defaults. */
-    private fun migrate(root: JSONObject, fromSchema: Int): JSONObject {
-        var current = root
-        // v0/unknown payloads are already handled by LedgerRepository's optional fields.
-        if (fromSchema <= 0) {
-            current = root
-        }
-        return current
     }
 
     private fun enforceRetention() {

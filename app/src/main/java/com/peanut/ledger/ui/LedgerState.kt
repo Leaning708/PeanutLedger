@@ -360,16 +360,11 @@ class LedgerState(private val context: Context) {
             }
 
             is RestoreCheck.Ready -> {
-                val migratedLine = if (check.migrated) {
-                    "\n这是一份旧版本备份，将按当前版本的数据结构自动兼容读取。"
-                } else {
-                    ""
-                }
                 val message = "备份时间：${check.info.timeLabel}\n" +
                     "备份数据版本：${check.info.versionLabel}（code ${check.info.appVersionCode}）\n" +
                     "当前 APP 版本：v${BackupManager.currentAppVersionName()}（code ${BackupManager.currentAppVersionCode()}）\n\n" +
                     "恢复后，当前所有记账、类型、收购商和设置都会被这份历史数据覆盖，且无法撤销。" +
-                    "恢复前会先自动创建一份当前数据的安全备份。$migratedLine"
+                    "恢复前会先自动创建一份当前数据的安全备份。"
                 openSheet(
                     Sheet.Confirm(
                         title = "恢复此备份？",
@@ -660,46 +655,6 @@ class LedgerState(private val context: Context) {
         updateEntry(entryId) { entry -> entry.copy(supplierName = clean) }
         sheet = null
         showToast("已修改")
-    }
-
-    private fun normalizeSupplierNames() {
-        var changed = false
-        val days = data.days.mapValues { (_, day) ->
-            val purchases = day.purchases.map { entry ->
-                val clean = entry.supplierName.trim()
-                val number = when {
-                    clean.startsWith("户") -> clean.removePrefix("户").toIntOrNull()
-                    else -> clean.toIntOrNull()
-                }
-                if (number != null && clean != "供货商$number") {
-                    changed = true
-                    entry.copy(supplierName = "供货商$number")
-                } else {
-                    entry
-                }
-            }
-            if (purchases != day.purchases) day.copy(purchases = purchases) else day
-        }
-        if (changed) {
-            data = data.copy(days = days)
-            persist()
-        }
-    }
-
-    private fun ensureSaleBuyersBound() {
-        val existing = data.settings.buyers.map { it.name }.toSet()
-        val missing = data.days.values
-            .flatMap { it.sales }
-            .map { it.buyerName.trim() }
-            .filter { it.isNotBlank() && it !in existing }
-            .distinct()
-        if (missing.isEmpty()) return
-        data = data.copy(
-            settings = data.settings.copy(
-                buyers = data.settings.buyers + missing.map { NamedOption(it) }
-            )
-        )
-        persist()
     }
 
     fun toggleSettled(entryId: String) {
