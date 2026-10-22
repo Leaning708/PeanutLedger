@@ -101,7 +101,7 @@ fun SettingsScreen(state: LedgerState) {
                     )
                     Spacer(Modifier.height(7.dp))
                     Text(
-                        text = "数据仅保存在本机 · 花生账本 v0.1.6",
+                        text = "数据仅保存在本机 · 花生账本 v0.1.7",
                         color = Placeholder,
                         fontSize = 11.sp,
                         textAlign = TextAlign.Center

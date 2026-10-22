@@ -36,7 +36,9 @@ enum class AppIcon {
     DragHandle,
     Pin,
     Chart,
-    Backup
+    Backup,
+    Download,
+    Upload
 }
 
 @Composable
@@ -237,6 +239,26 @@ fun AppIconView(
                 line(5f, 8f, 19f, 8f)
                 line(5f, 12f, 19f, 12f)
                 line(5f, 16f, 19f, 16f)
+            }
+
+            AppIcon.Download -> {
+                line(12f, 4f, 12f, 15f)
+                strokePath {
+                    moveTo(dx + 8f * s, dy + 11f * s)
+                    lineTo(dx + 12f * s, dy + 15f * s)
+                    lineTo(dx + 16f * s, dy + 11f * s)
+                }
+                line(5f, 20f, 19f, 20f)
+            }
+
+            AppIcon.Upload -> {
+                line(12f, 20f, 12f, 9f)
+                strokePath {
+                    moveTo(dx + 8f * s, dy + 13f * s)
+                    lineTo(dx + 12f * s, dy + 9f * s)
+                    lineTo(dx + 16f * s, dy + 13f * s)
+                }
+                line(5f, 4f, 19f, 4f)
             }
 
             AppIcon.Backup -> {

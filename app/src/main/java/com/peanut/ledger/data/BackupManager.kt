@@ -1,6 +1,7 @@
 package com.peanut.ledger.data
 
 import android.content.Context
+import android.net.Uri
 import com.peanut.ledger.BuildConfig
 import org.json.JSONObject
 import java.io.File
@@ -73,7 +74,7 @@ sealed interface RestoreCheck {
  * repository payload. The envelope carries the APP version, schema version and
  * format version so a restore can be checked before any local data is touched.
  */
-class BackupManager(context: Context) {
+class BackupManager(private val context: Context) {
     companion object {
         const val CURRENT_FORMAT_VERSION = 1
         const val CURRENT_SCHEMA_VERSION = 1
@@ -98,15 +99,15 @@ class BackupManager(context: Context) {
         }
 
     var frequencyDays: Int
-        get() = prefs.getInt(KEY_FREQUENCY, DEFAULT_FREQUENCY_DAYS)
+        get() = prefs.getInt(KEY_FREQUENCY, DEFAULT_FREQUENCY_DAYS).coerceIn(0, 365)
         set(value) {
-            prefs.edit().putInt(KEY_FREQUENCY, value.coerceIn(0, 7)).apply()
+            prefs.edit().putInt(KEY_FREQUENCY, value.coerceIn(0, 365)).apply()
         }
 
     var retentionDays: Int
-        get() = prefs.getInt(KEY_RETENTION, DEFAULT_RETENTION_DAYS).coerceIn(1, 30)
+        get() = prefs.getInt(KEY_RETENTION, DEFAULT_RETENTION_DAYS).coerceIn(1, 3650)
         set(value) {
-            prefs.edit().putInt(KEY_RETENTION, value.coerceIn(1, 30)).apply()
+            prefs.edit().putInt(KEY_RETENTION, value.coerceIn(1, 3650)).apply()
             enforceRetention()
         }
 
@@ -185,6 +186,60 @@ class BackupManager(context: Context) {
             if (elapsed < 0) return null
         }
         createBackup(data, BackupReason.AUTO)
+    }
+
+    fun copyBackupTo(file: File, uri: Uri): Boolean = runCatching {
+        context.contentResolver.openOutputStream(uri)?.use { output ->
+            file.inputStream().use { input -> input.copyTo(output) }
+        } != null
+    }.getOrDefault(false)
+
+    fun importBackup(uri: Uri): File? {
+        if (!backupDir.exists()) backupDir.mkdirs()
+        var file = File(backupDir, "peanut-import-${System.currentTimeMillis()}.json")
+        var suffix = 1
+        while (file.exists()) {
+            file = File(backupDir, "peanut-import-${System.currentTimeMillis()}-$suffix.json")
+            suffix++
+        }
+        val copied = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                file.outputStream().use { output -> input.copyTo(output) }
+            } != null
+        }.getOrDefault(false)
+        if (!copied) {
+            file.delete()
+            return null
+        }
+        return file
+    }
+
+    fun deleteBackup(file: File): Boolean = synchronized(this) {
+        val deleted = file.isFile && file.delete()
+        if (deleted) {
+            backupRevisionCleanup()
+        }
+        deleted
+    }
+
+    fun deleteAllBackups(): Int = synchronized(this) {
+        var count = 0
+        backupDir.listFiles()?.forEach { file ->
+            if (file.isFile && file.extension.equals("json", ignoreCase = true) && file.delete()) {
+                count++
+            }
+        }
+        prefs.edit().remove(KEY_LAST_SUCCESS).apply()
+        count
+    }
+
+    private fun backupRevisionCleanup() {
+        val hasBackups = backupDir.listFiles()?.any {
+            it.isFile && it.extension.equals("json", ignoreCase = true)
+        } == true
+        if (!hasBackups) {
+            prefs.edit().remove(KEY_LAST_SUCCESS).apply()
+        }
     }
 
     fun checkRestore(file: File): RestoreCheck {

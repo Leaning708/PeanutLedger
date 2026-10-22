@@ -1,6 +1,7 @@
 package com.peanut.ledger.ui
 
 import android.content.Context
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -381,6 +382,96 @@ class LedgerState(private val context: Context) {
                 )
             }
         }
+    }
+
+    fun downloadBackup(info: BackupInfo, uri: Uri) {
+        if (backupManager.copyBackupTo(info.file, uri)) {
+            showToast("备份文件已导出")
+        } else {
+            showToast("导出失败，请检查存储权限或空间")
+        }
+    }
+
+    fun importBackup(uri: Uri) {
+        val file = backupManager.importBackup(uri)
+        if (file == null) {
+            showToast("备份文件读取失败")
+            return
+        }
+        when (val check = backupManager.checkRestore(file)) {
+            is RestoreCheck.Ready -> {
+                backupRevision++
+                requestRestore(check.info)
+            }
+
+            is RestoreCheck.Blocked -> {
+                backupManager.deleteBackup(file)
+                backupRevision++
+                openSheet(
+                    Sheet.Confirm(
+                        title = "无法还原此备份",
+                        message = check.message,
+                        confirmLabel = "知道了",
+                        destructive = false,
+                        icon = AppIcon.Backup,
+                        onConfirm = {}
+                    )
+                )
+            }
+
+            is RestoreCheck.Invalid -> {
+                backupManager.deleteBackup(file)
+                backupRevision++
+                openSheet(
+                    Sheet.Confirm(
+                        title = "备份文件不可用",
+                        message = check.message,
+                        confirmLabel = "知道了",
+                        destructive = false,
+                        icon = AppIcon.Backup,
+                        onConfirm = {}
+                    )
+                )
+            }
+        }
+    }
+
+    fun requestDeleteBackup(info: BackupInfo) {
+        openSheet(
+            Sheet.Confirm(
+                title = "删除此备份？",
+                message = "将删除 ${info.timeLabel} 的「${info.reason.label}」（${info.versionLabel}）。\n删除后无法恢复，但不会影响当前账本数据。",
+                confirmLabel = "删除备份",
+                destructive = true,
+                icon = AppIcon.Trash,
+                onConfirm = {
+                    if (backupManager.deleteBackup(info.file)) {
+                        backupRevision++
+                        showToast("备份已删除")
+                    } else {
+                        showToast("删除失败")
+                    }
+                }
+            )
+        )
+    }
+
+    fun requestDeleteAllBackups(count: Int) {
+        if (count <= 0) return
+        openSheet(
+            Sheet.Confirm(
+                title = "删除全部备份？",
+                message = "将删除全部 $count 条备份记录，删除后无法恢复。\n当前账本数据不会被删除。",
+                confirmLabel = "全部删除",
+                destructive = true,
+                icon = AppIcon.Trash,
+                onConfirm = {
+                    val deleted = backupManager.deleteAllBackups()
+                    backupRevision++
+                    showToast(if (deleted > 0) "已删除 $deleted 条备份" else "没有可删除的备份")
+                }
+            )
+        )
     }
 
     private fun restoreBackup(info: BackupInfo, restored: LedgerData) {
