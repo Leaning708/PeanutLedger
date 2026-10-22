@@ -70,13 +70,17 @@ import com.peanut.ledger.data.LedgerEntry
 import com.peanut.ledger.data.LedgerTab
 import com.peanut.ledger.data.LedgerType
 import com.peanut.ledger.data.dateLabel
+import com.peanut.ledger.data.entryAutoTotal
 import com.peanut.ledger.data.entryFinal
+import com.peanut.ledger.data.entryHasAdjustedAmount
 import com.peanut.ledger.data.entryTotal
 import com.peanut.ledger.data.fmtHM
 import com.peanut.ledger.data.fmtMoney
 import com.peanut.ledger.data.fmtNum
 import com.peanut.ledger.data.fmtSigned
 import com.peanut.ledger.data.itemAmount
+import com.peanut.ledger.data.itemAutoAmount
+import com.peanut.ledger.data.itemIsAdjusted
 import com.peanut.ledger.data.round2
 import com.peanut.ledger.data.typeSubtotal
 import com.peanut.ledger.data.weekLabel
@@ -433,6 +437,8 @@ private fun EntryCard(
     val revealed = state.isRevealed(entry.id)
     val masked = state.privacyMode && !revealed
     val total = entryTotal(entry)
+    val autoTotal = entryAutoTotal(entry)
+    val hasAdjustedAmount = entryHasAdjustedAmount(entry)
     val final = entryFinal(entry)
     val adjust = round2(final - total)
     val finalLabel = if (isBuy) "实付" else "实收"
@@ -631,6 +637,15 @@ private fun EntryCard(
                 Column(Modifier.weight(1f).padding(top = 2.dp)) {
                     TinyLabel("合计")
                     Spacer(Modifier.height(3.dp))
+                    if (hasAdjustedAmount && !masked) {
+                        Text(
+                            text = fmtMoney(autoTotal),
+                            color = MutedLight,
+                            fontSize = 11.sp,
+                            textDecoration = TextDecoration.LineThrough
+                        )
+                        Spacer(Modifier.height(1.dp))
+                    }
                     Text(
                         text = money(total),
                         color = TextSoft,
@@ -820,12 +835,36 @@ private fun TypeSection(
                     )
                     UnitText(" 元")
                 }
-                Text(
-                    text = if (masked) "****" else fmtMoney(itemAmount(item)),
-                    color = TextMain,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                if (masked) {
+                    Text(
+                        text = "****",
+                        color = TextMain,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                } else if (itemIsAdjusted(item)) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = fmtMoney(itemAutoAmount(item)),
+                            color = Muted,
+                            fontSize = 11.sp,
+                            textDecoration = TextDecoration.LineThrough
+                        )
+                        Text(
+                            text = fmtMoney(itemAmount(item)),
+                            color = TextMain,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                } else {
+                    Text(
+                        text = fmtMoney(itemAmount(item)),
+                        color = TextMain,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
         Row(
@@ -837,7 +876,7 @@ private fun TypeSection(
         ) {
             AppIconView(AppIcon.Plus, tint = Primary, modifier = Modifier.size(12.dp))
             Spacer(Modifier.width(4.dp))
-            Text("新增称", color = Primary, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
+            Text("新增称重", color = Primary, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -894,6 +933,17 @@ private fun EmptyState(tab: LedgerTab) {
 
 @Composable
 private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier = Modifier) {
+    val day = state.day(state.currentDate)
+    val buyWeight = round2(
+        day.buys.sumOf { entry ->
+            entry.types.sumOf { type -> type.items.sumOf { it.weight } }
+        }
+    )
+    val sellWeight = round2(
+        day.sells.sumOf { entry ->
+            entry.types.sumOf { type -> type.items.sumOf { it.weight } }
+        }
+    )
     Surface(
         modifier = modifier
             .padding(horizontal = 12.dp)
@@ -942,6 +992,24 @@ private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier =
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    WeightChip(
+                        label = "采购",
+                        weight = buyWeight,
+                        color = Primary,
+                        masked = state.privacyMode
+                    )
+                    WeightChip(
+                        label = "销售",
+                        weight = sellWeight,
+                        color = AvatarSell,
+                        masked = state.privacyMode
+                    )
+                }
             }
             Spacer(Modifier.width(10.dp))
             Box(
@@ -966,5 +1034,30 @@ private fun BottomDock(state: LedgerState, stats: DayStats, modifier: Modifier =
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun WeightChip(label: String, weight: Double, color: Color, masked: Boolean) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(5.dp))
+            .background(SurfaceSoft)
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            color = if (masked) Placeholder else color,
+            fontSize = 9.5.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(Modifier.width(3.dp))
+        Text(
+            text = if (masked) "**** 斤" else "${fmtNum(weight)} 斤",
+            color = if (masked) Placeholder else Muted,
+            fontSize = 9.5.sp,
+            fontWeight = FontWeight.Medium
+        )
     }
 }

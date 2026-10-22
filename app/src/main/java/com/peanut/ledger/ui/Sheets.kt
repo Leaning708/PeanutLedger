@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
@@ -71,6 +72,7 @@ import com.peanut.ledger.data.entryTotal
 import com.peanut.ledger.data.fmtMoney
 import com.peanut.ledger.data.fmtNum
 import com.peanut.ledger.data.itemAmount
+import com.peanut.ledger.data.itemAutoAmount
 import com.peanut.ledger.data.nextRoundUp
 import com.peanut.ledger.data.round2
 import com.peanut.ledger.ui.theme.CardBorder
@@ -731,14 +733,23 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
                 ?: ""
         )
     }
-    var amountManual by remember(sheet.formKey) { mutableStateOf(item?.manualAmount != null) }
+    val initialAuto = item?.let { itemAutoAmount(it) } ?: 0.0
+    val initialManual = item?.manualAmount?.takeIf {
+        abs(round2(it) - initialAuto) >= 0.005
+    }
+    var amountManual by remember(sheet.formKey) { mutableStateOf(initialManual != null) }
     var amountText by remember(sheet.formKey) {
         mutableStateOf(
-            item?.manualAmount?.let { String.format(Locale.US, "%.2f", it) } ?: ""
+            initialManual?.let { String.format(Locale.US, "%.2f", it) } ?: ""
         )
     }
     val autoAmountText = autoAmount(weightText, priceText)
     val displayedAmount = if (amountManual) amountText else autoAmountText
+    val autoValue = round2(
+        (weightText.toDoubleOrNull() ?: 0.0) * (priceText.toDoubleOrNull() ?: 0.0)
+    )
+    val manualValue = round2(amountText.toDoubleOrNull() ?: 0.0)
+    val manualDiff = if (amountManual) round2(manualValue - autoValue) else 0.0
 
     fun save(keepOpen: Boolean) {
         val weight = round2(weightText.toDoubleOrNull() ?: 0.0)
@@ -753,11 +764,7 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
             itemId = sheet.itemId,
             weight = weight,
             price = price,
-            amountOverride = if (amountManual) {
-                round2(amountText.toDoubleOrNull() ?: 0.0)
-            } else {
-                null
-            },
+            amountOverride = if (amountManual) manualValue else null,
             keepOpen = keepOpen
         )
         if (!saved) {
@@ -767,7 +774,7 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
 
     Column {
         SheetTitle(
-            text = if (isEdit) "编辑称" else "新增称",
+            text = if (isEdit) "编辑称重" else "新增称重",
             subtitle = "${type.name} · 输入重量、单价，金额可手动调整"
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -854,7 +861,17 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
                     amountText = it
                     amountManual = true
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .onFocusChanged { focusState ->
+                        if (!focusState.isFocused && amountManual) {
+                            val typed = round2(amountText.toDoubleOrNull() ?: 0.0)
+                            if (abs(typed - autoValue) < 0.005) {
+                                amountManual = false
+                                amountText = ""
+                            }
+                        }
+                    },
                 textStyle = TextStyle(
                     color = TextMain,
                     fontSize = 20.sp,
@@ -875,11 +892,37 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
                     innerTextField()
                 }
             )
-            Text(
-                text = if (amountManual) "手动" else "自动",
-                color = if (amountManual) Primary else Placeholder,
-                fontSize = 10.sp
-            )
+        }
+        if (abs(manualDiff) >= 0.005) {
+            Spacer(Modifier.height(6.dp))
+            val isBuy = state.tab == LedgerTab.BUY
+            val diffLabel = when {
+                manualDiff > 0 && isBuy -> "多付"
+                manualDiff > 0 -> "多收"
+                isBuy -> "少付"
+                else -> "少收"
+            }
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(GoldBg)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = diffLabel,
+                    color = PrimaryDark,
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = fmtMoney(abs(manualDiff)),
+                    color = PrimaryDark,
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
         Spacer(Modifier.height(22.dp))
         Row(

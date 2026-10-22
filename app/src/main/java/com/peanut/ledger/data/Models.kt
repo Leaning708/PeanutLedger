@@ -111,14 +111,26 @@ fun round2(value: Double): Double {
     return round(value * 100.0) / 100.0
 }
 
+fun itemAutoAmount(item: LedgerItem): Double =
+    round2(item.weight * item.price)
+
 fun itemAmount(item: LedgerItem): Double =
-    round2(item.manualAmount ?: (item.weight * item.price))
+    round2(item.manualAmount ?: itemAutoAmount(item))
+
+fun itemIsAdjusted(item: LedgerItem): Boolean =
+    item.manualAmount?.let { abs(round2(it) - itemAutoAmount(item)) >= 0.005 } ?: false
 
 fun typeSubtotal(type: LedgerType): Double =
     round2(type.items.sumOf { itemAmount(it) })
 
 fun entryTotal(entry: LedgerEntry): Double =
     round2(entry.types.sumOf { typeSubtotal(it) })
+
+fun entryAutoTotal(entry: LedgerEntry): Double =
+    round2(entry.types.sumOf { type -> type.items.sumOf { itemAutoAmount(it) } })
+
+fun entryHasAdjustedAmount(entry: LedgerEntry): Boolean =
+    entry.types.any { type -> type.items.any { itemIsAdjusted(it) } }
 
 fun entryFinal(entry: LedgerEntry): Double {
     entry.finalOverride?.let { return round2(it) }

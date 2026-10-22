@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -55,6 +56,7 @@ import com.peanut.ledger.ui.theme.CardWhite
 import com.peanut.ledger.ui.theme.GoldBg
 import com.peanut.ledger.ui.theme.Green
 import com.peanut.ledger.ui.theme.Line
+import com.peanut.ledger.ui.theme.LineStrong
 import com.peanut.ledger.ui.theme.Muted
 import com.peanut.ledger.ui.theme.Placeholder
 import com.peanut.ledger.ui.theme.Primary
@@ -98,7 +100,7 @@ fun SettingsScreen(state: LedgerState) {
                     )
                     Spacer(Modifier.height(7.dp))
                     Text(
-                        text = "数据仅保存在本机 · 花生账本 v0.1.0",
+                        text = "数据仅保存在本机 · 花生账本 v0.1.1",
                         color = Placeholder,
                         fontSize = 11.sp,
                         textAlign = TextAlign.Center
@@ -555,7 +557,15 @@ private fun LocationBlock(state: LedgerState) {
             Spacer(Modifier.width(10.dp))
             Switch(
                 checked = state.recordLocation,
-                onCheckedChange = { state.setRecordLocation(it) }
+                onCheckedChange = { state.setRecordLocation(it) },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = CardWhite,
+                    checkedTrackColor = Primary,
+                    checkedBorderColor = Primary,
+                    uncheckedThumbColor = CardWhite,
+                    uncheckedTrackColor = SurfaceSoft,
+                    uncheckedBorderColor = LineStrong
+                )
             )
         }
     }

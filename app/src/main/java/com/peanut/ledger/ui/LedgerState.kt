@@ -546,6 +546,9 @@ class LedgerState(private val context: Context) {
         val cleanWeight = round2(weight)
         if (cleanWeight <= 0.0) return false
         val cleanPrice = round2(price)
+        val cleanAmount = amountOverride?.takeIf {
+            abs(round2(it) - round2(cleanWeight * cleanPrice)) >= 0.005
+        }
         updateEntry(entryId) { entry ->
             entry.copy(
                 types = entry.types.map { type ->
@@ -556,7 +559,7 @@ class LedgerState(private val context: Context) {
                                 item.copy(
                                     weight = cleanWeight,
                                     price = cleanPrice,
-                                    manualAmount = amountOverride
+                                    manualAmount = cleanAmount
                                 )
                             } else {
                                 item
@@ -567,7 +570,7 @@ class LedgerState(private val context: Context) {
                             id = newId(),
                             weight = cleanWeight,
                             price = cleanPrice,
-                            manualAmount = amountOverride
+                            manualAmount = cleanAmount
                         )
                     }
                     type.copy(items = items)
