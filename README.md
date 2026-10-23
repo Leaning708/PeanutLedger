@@ -155,6 +155,21 @@ app/build/outputs/apk/debug/peanut-ledger.apk
 <img src="docs/screenshots/icon.png" width="160" />
 
 
+## 项目文档
+
+持续迭代所需的产品、架构、数据、开发、测试和路线图已归档到 [docs/README.md](docs/README.md)：
+
+- [产品说明](docs/PRODUCT.md)
+- [技术架构](docs/ARCHITECTURE.md)
+- [数据模型](docs/DATA_MODEL.md)
+- [开发与发布](docs/DEVELOPMENT.md)
+- [QA 回归清单](docs/QA_CHECKLIST.md)
+- [UI 规范](docs/UI_GUIDE.md)
+- [关键决策记录](docs/DECISIONS.md)
+- [后续路线图](docs/ROADMAP.md)
+- [接手摘要](docs/SESSION_HANDOFF.md)
+- [发布归档](docs/RELEASES.md)
+
 ## 说明
 
 - 所有金额计算使用 `Double` 并统一保留两位小数；正式接入财务场景时建议替换为 `BigDecimal` 或以「分」为单位的整数。
