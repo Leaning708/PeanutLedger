@@ -103,7 +103,9 @@ fun LedgerTextField(
     singleLine: Boolean = true,
     minLines: Int = 1,
     maxLines: Int = 1,
-    minHeight: Dp = 50.dp
+    minHeight: Dp = 50.dp,
+    imeAction: ImeAction = if (singleLine) ImeAction.Done else ImeAction.Default,
+    onImeAction: (() -> Unit)? = null
 ) {
     val focusManager = LocalFocusManager.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -144,9 +146,14 @@ fun LedgerTextField(
         interactionSource = interactionSource,
         keyboardOptions = KeyboardOptions(
             keyboardType = keyboardType,
-            imeAction = if (singleLine) ImeAction.Done else ImeAction.Default
+            imeAction = imeAction
         ),
-        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+        keyboardActions = KeyboardActions(
+            onNext = { onImeAction?.invoke() },
+            onDone = {
+                if (onImeAction != null) onImeAction() else focusManager.clearFocus()
+            }
+        ),
         decorationBox = { innerTextField ->
             Box(
                 modifier = Modifier

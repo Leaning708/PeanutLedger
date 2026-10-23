@@ -59,6 +59,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -783,7 +784,9 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
                     },
                     modifier = Modifier.fillMaxWidth().focusRequester(priceFocusRequester),
                     placeholder = "0",
-                    keyboardType = KeyboardType.Decimal
+                    keyboardType = KeyboardType.Decimal,
+                    imeAction = ImeAction.Next,
+                    onImeAction = { weightFocusRequester.requestFocus() }
                 )
             }
             Column(Modifier.weight(1f)) {
@@ -797,7 +800,9 @@ private fun ItemFormSheet(state: LedgerState, sheet: Sheet.ItemForm) {
                     },
                     modifier = Modifier.fillMaxWidth().focusRequester(weightFocusRequester),
                     placeholder = "0",
-                    keyboardType = KeyboardType.Decimal
+                    keyboardType = KeyboardType.Decimal,
+                    imeAction = ImeAction.Done,
+                    onImeAction = { save(keepOpen = false) }
                 )
             }
         }
