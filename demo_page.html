@@ -1,0 +1,2214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>花生账本</title>
+    <style>
+        :root{
+          --bg:#F5F0E8; --card:#fff; --primary:#C0762B; --primary-d:#A35F1C;
+          --text:#2F2A24; --muted:#8B8178; --line:#F0E7D9; --sub:#FBF6EE;
+          --green:#4C9A6E; --red:#D24B3A;
+        }
+        *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+        [hidden]{display:none !important;}
+        html,body{margin:0;padding:0;}
+        body{
+          font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+          background:#EFE8DC;color:var(--text);font-size:15px;-webkit-font-smoothing:antialiased;
+        }
+        input[type=number]::-webkit-outer-spin-button,
+        input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+        input[type=number]{-moz-appearance:textfield;}
+        .mono{font-variant-numeric:tabular-nums;}
+
+        /* ---------- 主应用 ---------- */
+        .app{max-width:480px;margin:0 auto;min-height:100vh;background:var(--bg);padding-bottom:132px;position:relative;}
+
+        .header-wrap{position:sticky;top:0;z-index:20;background:var(--bg);}
+        .topbar{
+          display:flex;align-items:center;gap:6px;
+          padding:10px 10px 12px;
+          background:linear-gradient(160deg,#D08C46,#B06A22);
+          color:#fff;border-radius:0 0 18px 18px;
+          box-shadow:0 4px 14px rgba(160,100,40,.22);
+        }
+        .nav-btn{
+          width:38px;height:38px;flex:0 0 auto;border:none;border-radius:50%;
+          background:rgba(255,255,255,.18);color:#fff;font-size:22px;line-height:1;
+          display:flex;align-items:center;justify-content:center;cursor:pointer;
+          font-family:inherit;
+        }
+        .nav-btn:active{background:rgba(255,255,255,.34);}
+        .date-box{flex:1;text-align:center;overflow:hidden;}
+        .date-main{
+          display:flex;align-items:center;justify-content:center;gap:6px;
+          font-size:17px;font-weight:600;letter-spacing:.5px;
+          cursor:pointer;-webkit-user-select:none;user-select:none;
+        }
+        .date-main:active{opacity:.85;}
+        .cal-ico{font-size:15px;line-height:1;opacity:.92;}
+        .date-sub{font-size:12px;opacity:.85;margin-top:2px;}
+        .back-today{text-decoration:underline;text-underline-offset:2px;}
+
+        .seg-wrap{display:flex;gap:8px;align-items:center;padding:9px 12px 2px;}
+        .seg{flex:1;display:flex;background:#EAE1D3;border-radius:11px;padding:3px;gap:2px;min-width:0;}
+        .seg-btn{
+          flex:1;border:none;background:transparent;color:#8B8178;font-size:14px;font-weight:600;
+          padding:8px 0;border-radius:9px;cursor:pointer;font-family:inherit;transition:all .18s;
+        }
+        .seg-btn.active{background:#fff;color:#B06A22;box-shadow:0 1px 4px rgba(150,110,60,.15);}
+        .gear-btn{
+          flex:0 0 auto;width:42px;height:42px;border:none;border-radius:11px;
+          background:#fff;color:#8B8178;font-size:20px;cursor:pointer;font-family:inherit;
+          box-shadow:0 1px 4px rgba(150,110,60,.12);line-height:1;
+          display:flex;align-items:center;justify-content:center;
+        }
+        .gear-btn:active{background:#F7F0E5;}
+        .gear-btn.privacy-on{
+          background:#FFF3E0;color:#C0762B;
+          box-shadow:0 0 0 2px rgba(192,118,43,.22);
+        }
+
+        /* ---------- 内容 ---------- */
+        .content{padding:12px 12px 10px;}
+
+        .day-remark{
+          display:flex;align-items:flex-start;gap:7px;
+          background:#fff;border-radius:13px;padding:11px 13px;margin-bottom:12px;
+          font-size:13px;color:#7A6A55;line-height:1.5;cursor:pointer;
+          box-shadow:0 2px 10px rgba(150,110,60,.07);word-break:break-all;
+        }
+        .day-remark .dr-ico{flex:0 0 auto;font-size:14px;line-height:1.4;}
+        .day-remark:active{background:#FDFAF5;}
+
+        .farmer-card{
+          background:var(--card);border-radius:16px;padding:12px 13px 10px;margin-bottom:12px;
+          box-shadow:0 2px 10px rgba(150,110,60,.08);
+          touch-action:manipulation;
+          transition:box-shadow .2s;
+        }
+        .farmer-card.revealed{
+          box-shadow:0 2px 10px rgba(150,110,60,.08), 0 0 0 2px rgba(192,118,43,.35);
+        }
+        .farmer-head{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+        .farmer-name{display:flex;align-items:center;gap:8px;font-weight:600;font-size:16px;min-width:0;flex:1;}
+        .farmer-name>span:not(.avatar):not(.settle-tag):not(.reveal-badge){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .avatar{
+          width:26px;height:26px;border-radius:50%;flex:0 0 auto;
+          color:#fff;font-size:13px;font-weight:600;
+          display:flex;align-items:center;justify-content:center;
+        }
+        .avatar.buy{background:linear-gradient(140deg,#F0C08A,#D08C46);}
+        .avatar.sell{background:linear-gradient(140deg,#9FD3B4,#4C9A6E);}
+        .head-right{display:flex;align-items:center;flex:0 0 auto;gap:2px;}
+        .entry-time{
+          font-size:11px;color:#B7AC9E;font-variant-numeric:tabular-nums;
+          white-space:nowrap;
+        }
+        .icon-btn{
+          border:none;background:transparent;color:#B7AC9E;font-size:20px;line-height:1;
+          width:32px;height:32px;border-radius:8px;cursor:pointer;font-family:inherit;flex:0 0 auto;
+        }
+        .icon-btn:active{background:#F5EFE5;}
+
+        .settle-tag{
+          font-size:10.5px;font-weight:600;border-radius:5px;padding:1px 6px;margin-left:2px;
+          flex:0 0 auto;white-space:nowrap;
+        }
+        .settle-tag.unsettled{background:#FDEDEA;color:#D24B3A;}
+        .settle-tag.settled{background:#E8F5EE;color:#4C9A6E;}
+
+        .reveal-badge{
+          font-size:10.5px;font-weight:600;color:#C0762B;
+          background:#FFF3E0;border-radius:6px;padding:1px 6px;margin-left:4px;
+          white-space:nowrap;flex:0 0 auto;
+        }
+
+        .remark-row{
+          margin-top:8px;font-size:12.5px;color:#8B8178;
+          background:#FBF6EE;border-radius:9px;padding:8px 10px;
+          line-height:1.45;cursor:pointer;word-break:break-all;
+        }
+        .remark-row:active{background:#F5EFE5;}
+
+        .types{margin-top:10px;display:flex;flex-direction:column;gap:8px;}
+        .no-type{font-size:13px;color:#C4B9A8;padding:6px 2px;}
+        .type-group{background:var(--sub);border-radius:12px;padding:10px 10px 6px;}
+        .type-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;}
+        .type-name{font-size:13.5px;font-weight:600;color:#8A6A45;display:flex;align-items:center;gap:6px;}
+        .type-name::before{content:'';width:6px;height:6px;border-radius:50%;background:#D08C46;}
+        .type-sum{font-size:13px;color:#B08954;font-weight:600;}
+
+        .item-row{
+          display:flex;align-items:center;justify-content:space-between;gap:8px;
+          padding:9px 2px;border-bottom:1px dashed #EFE3D0;font-size:13.5px;cursor:pointer;
+        }
+        .item-row:last-child{border-bottom:none;}
+        .item-left{display:flex;align-items:center;gap:3px;color:#5C5348;flex-wrap:wrap;}
+        .item-left .w,.item-left .p{font-weight:600;color:#3C352C;}
+        .item-left .u{font-size:11px;color:#A2988A;}
+        .item-left .x{color:#C4B9A8;margin:0 2px;}
+        .tag{font-size:10px;padding:1px 5px;border-radius:5px;background:#FFF0DC;color:#C08A3E;margin-left:4px;}
+        .item-right{font-weight:700;color:#2F2A24;font-size:14.5px;white-space:nowrap;}
+
+        .add-item-btn,.add-type-btn{
+          width:100%;border:1px dashed #E0D2BC;background:transparent;color:#B08954;
+          font-size:12.5px;padding:8px;border-radius:9px;margin-top:6px;cursor:pointer;font-family:inherit;
+        }
+        .add-item-btn:active,.add-type-btn:active{background:#F6EBD9;}
+        .add-type-btn{margin-top:10px;}
+
+        .farmer-foot{margin-top:10px;padding-top:9px;border-top:1px solid var(--line);}
+        .foot-row{display:flex;justify-content:space-between;font-size:13px;color:#8B8178;padding:2px 0;}
+        .foot-row b{color:#3C352C;font-weight:600;}
+        .foot-row.adj b{color:#D08C46;}
+        .foot-row.final{font-size:14px;align-items:baseline;padding:5px 2px;margin:2px -2px 0;border-radius:8px;}
+        .foot-row.final.clickable{cursor:pointer;}
+        .foot-row.final.clickable:active{background:#FBF6EE;}
+        .foot-row.final b{color:#C0762B;font-size:17px;font-weight:700;}
+        .foot-row.final .edit-ico{
+          font-style:normal;font-size:11px;color:#B7AC9E;margin-left:4px;
+        }
+
+        /* ---------- 空状态 ---------- */
+        .empty{text-align:center;padding:56px 20px;color:#B7AC9E;}
+        .empty-ico{font-size:46px;margin-bottom:12px;}
+        .empty p{margin:4px 0;font-size:14px;}
+        .empty-sub{font-size:12.5px;color:#C4B9A8;}
+
+        /* ---------- 底部栏 ---------- */
+        .bottombar{
+          position:fixed;left:0;right:0;bottom:0;z-index:30;max-width:480px;margin:0 auto;
+          display:flex;align-items:center;gap:12px;
+          padding:9px 14px calc(9px + env(safe-area-inset-bottom));
+          background:rgba(255,255,255,.97);border-top:1px solid var(--line);
+          box-shadow:0 -4px 16px rgba(150,110,60,.07);backdrop-filter:blur(8px);
+        }
+        .pl{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
+        .pl-top{display:flex;align-items:baseline;gap:6px;}
+        .pl-label{font-size:11px;color:var(--muted);flex:0 0 auto;}
+        .pl-value{
+          font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15;
+          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+        }
+        .pl-value.profit{color:#C0762B;}
+        .pl-value.loss{color:var(--green);}
+        .pl-value.masked{color:#B7AC9E;letter-spacing:1px;}
+        .pl-sub{
+          font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;
+          text-overflow:ellipsis;font-variant-numeric:tabular-nums;
+        }
+        .primary-btn{
+          flex:0 0 auto;border:none;border-radius:11px;padding:12px 17px;
+          font-size:14.5px;font-weight:600;color:#fff;
+          background:linear-gradient(135deg,#D08C46,#B06A22);cursor:pointer;font-family:inherit;
+          box-shadow:0 4px 12px rgba(176,106,34,.3);white-space:nowrap;
+        }
+        .primary-btn:active{transform:translateY(1px);}
+
+        /* ---------- 弹层 ---------- */
+        .mask{
+          position:fixed;inset:0;background:rgba(0,0,0,.42);opacity:0;pointer-events:none;
+          transition:opacity .25s;z-index:55;
+        }
+        .mask.show{opacity:1;pointer-events:auto;}
+        .sheet{
+          position:fixed;left:0;right:0;bottom:0;z-index:60;max-width:480px;margin:0 auto;
+          background:#fff;border-radius:20px 20px 0 0;
+          padding:18px 16px calc(18px + env(safe-area-inset-bottom));
+          transform:translateY(110%);transition:transform .28s cubic-bezier(.2,.9,.3,1);
+          max-height:88vh;overflow-y:auto;
+        }
+        .sheet.show{transform:translateY(0);}
+        .sheet-title{margin:0 0 14px;font-size:17px;font-weight:700;text-align:center;}
+
+        .field{display:block;margin-bottom:12px;}
+        .field>span{display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px;}
+        .auto-tip{float:right;font-style:normal;color:#C08A3E;font-size:11.5px;}
+        .input{
+          width:100%;border:1px solid #E7DCCB;border-radius:11px;padding:12px;
+          font-size:16px;background:#FCFAF6;outline:none;color:var(--text);font-family:inherit;
+        }
+        .input:focus{border-color:#D08C46;background:#fff;}
+        .input.manual{border-color:#E0B168;background:#FFFBF3;color:#B06A22;font-weight:600;}
+        select.input{
+          appearance:none;-webkit-appearance:none;
+          background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23A2988A' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+          background-repeat:no-repeat;background-position:right 14px center;
+          padding-right:36px;
+        }
+        .row2{display:flex;gap:10px;}
+        .row2 .field{flex:1;}
+
+        .sync-check{
+          display:flex;align-items:center;gap:8px;font-size:13.5px;color:#5C5348;
+          margin-bottom:14px;cursor:pointer;padding:4px 0;
+        }
+        .sync-check input{width:18px;height:18px;accent-color:#C0762B;}
+
+        .last-price-tip{
+          display:block;font-size:11.5px;color:#C08A3E;margin-top:-6px;margin-bottom:12px;
+          padding-left:2px;
+        }
+
+        .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+        .chip{
+          border:1px solid #E7DCCB;background:#FCFAF6;color:#7A6A55;border-radius:999px;
+          padding:9px 15px;font-size:14px;cursor:pointer;font-family:inherit;
+        }
+        .chip:active{background:#F6E9D6;border-color:#D08C46;color:#B06A22;}
+
+        .sheet-actions{display:flex;gap:10px;margin-top:6px;}
+        .btn{
+          flex:1;border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:600;
+          cursor:pointer;font-family:inherit;
+        }
+        .btn.primary{background:linear-gradient(135deg,#D08C46,#B06A22);color:#fff;}
+        .btn.ghost{background:#F3EDE3;color:#7A6A55;flex:0 0 auto;padding-left:20px;padding-right:20px;}
+        .btn.danger{background:#E05B4B;color:#fff;}
+        .btn.danger-ghost{background:#FDEDEA;color:#D24B3A;flex:0 0 auto;padding-left:16px;padding-right:16px;}
+        .btn.danger-outline{background:#FDEDEA;color:#D24B3A;}
+
+        .action-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+        .action-item{
+          border:none;background:#F8F4ED;border-radius:12px;padding:15px;font-size:15px;
+          color:#3C352C;text-align:center;cursor:pointer;font-family:inherit;
+          display:flex;align-items:center;justify-content:center;gap:6px;
+        }
+        .action-item:active{background:#F0E9DC;}
+        .action-item.danger{color:#D24B3A;background:#FDEDEA;}
+
+        .hint{font-size:13px;color:var(--muted);text-align:center;margin-bottom:14px;line-height:1.6;}
+        .hint b{color:#C0762B;}
+
+        .toast{
+          position:fixed;left:50%;bottom:140px;transform:translate(-50%,10px);
+          background:rgba(45,40,34,.92);color:#fff;padding:10px 18px;border-radius:999px;
+          font-size:13.5px;opacity:0;pointer-events:none;transition:all .22s;z-index:100;
+          white-space:nowrap;max-width:86vw;overflow:hidden;text-overflow:ellipsis;
+        }
+        .toast.show{opacity:1;transform:translate(-50%,0);}
+
+        /* ---------- 设置页 ---------- */
+        .settings-view{max-width:480px;margin:0 auto;min-height:100vh;background:var(--bg);padding-bottom:34px;}
+        .settings-topbar{border-radius:0 0 18px 18px;}
+        .settings-content{padding:14px 12px;}
+        .set-block{
+          background:#fff;border-radius:16px;padding:14px;margin-bottom:14px;
+          box-shadow:0 2px 10px rgba(150,110,60,.08);
+        }
+        .set-title{font-size:13.5px;font-weight:700;color:#5C5348;margin-bottom:10px;}
+        .set-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+        .set-chip{
+          display:inline-flex;align-items:center;gap:2px;background:#F8F2E8;color:#7A6A55;
+          border-radius:999px;padding:7px 8px 7px 13px;font-size:13.5px;
+        }
+        .set-chip button{
+          border:none;background:transparent;color:#B7AC9E;font-size:16px;line-height:1;
+          padding:0 3px;cursor:pointer;font-family:inherit;
+        }
+        .set-chip button:active{color:var(--red);}
+        .set-empty{font-size:12.5px;color:#C4B9A8;}
+        .set-add{display:flex;gap:8px;}
+        .set-add .input{flex:1;padding:10px 12px;font-size:14px;}
+        .set-add-btn{
+          flex:0 0 auto;border:none;border-radius:11px;padding:0 18px;
+          background:linear-gradient(135deg,#D08C46,#B06A22);color:#fff;
+          font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;
+        }
+        .logout-btn{width:100%;padding:14px;margin-top:6px;}
+
+        /* ============================================================
+           自定义日历
+           ============================================================ */
+        .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+        .cal-nav{
+          width:38px;height:38px;border:none;border-radius:50%;background:#F5EFE5;color:#8A6A45;
+          font-size:20px;line-height:1;cursor:pointer;font-family:inherit;
+          display:flex;align-items:center;justify-content:center;
+        }
+        .cal-nav:active{background:#EEE5D6;}
+        .cal-title{
+          border:none;background:transparent;font-size:16px;font-weight:700;color:#3C352C;
+          cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:6px;
+          padding:6px 10px;border-radius:9px;
+        }
+        .cal-title:active{background:#F5EFE5;}
+        .cal-mode-tag{font-size:10px;font-weight:600;color:#fff;background:#C08A3E;border-radius:5px;padding:1px 5px;}
+
+        .cal-summary{
+          display:flex;background:#FBF6EE;border-radius:12px;padding:10px 6px;margin-bottom:12px;gap:2px;
+        }
+        .cal-summary .cs-item{flex:1;text-align:center;min-width:0;}
+        .cal-summary .cs-label{display:block;font-size:10.5px;color:#A2988A;margin-bottom:3px;}
+        .cal-summary .cs-val{
+          font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;
+          color:#3C352C;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+        }
+        .cal-summary .cs-val.profit{color:#C0762B;}
+        .cal-summary .cs-val.loss{color:#4C9A6E;}
+        .cal-summary .cs-val.masked{color:#B7AC9E;letter-spacing:1px;}
+
+        .cal-week{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;}
+        .cal-week span{text-align:center;font-size:11.5px;color:#A2988A;}
+        .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+        .cal-cell{
+          position:relative;
+          min-height:50px;border-radius:10px;display:flex;flex-direction:column;
+          align-items:center;justify-content:center;cursor:pointer;padding:4px 0;
+        }
+        .cal-cell:active{background:#F5EFE5;}
+        .cal-cell .dnum{font-size:14px;font-weight:600;color:#3C352C;line-height:1.25;}
+        .cal-cell .dprofit{
+          font-size:9px;line-height:1.2;margin-top:2px;
+          font-variant-numeric:tabular-nums;white-space:nowrap;max-width:100%;overflow:hidden;
+        }
+        .cal-cell.other .dnum{color:#CFC5B6;font-weight:400;}
+        .cal-cell.other .dprofit{opacity:.55;}
+        .cal-cell.today{background:#FBF0DF;}
+        .cal-cell.selected{background:linear-gradient(140deg,#D08C46,#B06A22);}
+        .cal-cell.selected .dnum{color:#fff;}
+        .cal-cell.selected .dprofit{color:#fff !important;opacity:.95;}
+
+        .cal-cell .unsettled-dot{
+          position:absolute;top:3px;right:3px;
+          width:7px;height:7px;border-radius:50%;
+          background:#D24B3A;
+          box-shadow:0 0 0 1px #fff;
+        }
+        .cal-cell.selected .unsettled-dot{
+          box-shadow:0 0 0 1px rgba(255,255,255,.5);
+        }
+
+        .cal-grid-month{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+        .cal-mcell{
+          position:relative;
+          background:#FBF6EE;border-radius:12px;padding:12px 4px;text-align:center;cursor:pointer;
+          overflow:hidden;
+        }
+        .cal-mcell:active{background:#F5ECDD;}
+        .cal-mcell.cur{outline:2px solid #D08C46;outline-offset:-2px;background:#FFF7EC;}
+        .cal-mcell.today-month{background:#FBF0DF;}
+        .cal-mcell .mnum{font-size:15px;font-weight:600;color:#3C352C;}
+        .cal-mcell .mprofit{
+          font-size:11px;margin-top:4px;font-variant-numeric:tabular-nums;
+          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+        }
+        .cal-mcell .unsettled-dot{
+          position:absolute;top:7px;right:7px;
+          width:7px;height:7px;border-radius:50%;
+          background:#D24B3A;
+          box-shadow:0 0 0 1px #fff;
+        }
+    </style>
+</head>
+<body>
+
+<!-- ================= 主应用 ================= -->
+<div class="app" id="appView">
+    <div class="header-wrap">
+        <header class="topbar">
+            <button class="nav-btn" data-act="prev-day">‹</button>
+            <div class="date-box">
+                <div class="date-main" data-act="open-calendar">
+                    <span class="cal-ico">📅</span>
+                    <span id="dateMainText">--</span>
+                </div>
+                <div class="date-sub" id="dateSub"></div>
+            </div>
+            <button class="nav-btn" data-act="next-day">›</button>
+        </header>
+        <div class="seg-wrap">
+            <div class="seg">
+                <button class="seg-btn active" data-act="tab" data-tab="buy">采购</button>
+                <button class="seg-btn" data-act="tab" data-tab="sell">销售</button>
+            </div>
+            <button class="gear-btn" id="privacyBtn" data-act="toggle-privacy" aria-label="隐私模式">👁</button>
+            <button class="gear-btn" id="moreBtn" data-act="open-more" aria-label="更多">⋯</button>
+        </div>
+    </div>
+
+    <main class="content" id="content"></main>
+
+    <footer class="bottombar">
+        <div class="pl">
+            <div class="pl-top">
+                <span class="pl-label">今日收支</span>
+                <span class="pl-value" id="plValue">¥0.00</span>
+            </div>
+            <div class="pl-sub" id="plSub">采购 ¥0 · 销售 ¥0</div>
+        </div>
+        <button class="primary-btn" id="mainAddBtn" data-act="add-entry">+ 新增农户</button>
+    </footer>
+</div>
+
+<!-- ================= 设置页 ================= -->
+<div class="settings-view" id="settingsView" hidden>
+    <header class="topbar settings-topbar">
+        <button class="nav-btn" data-act="close-settings">‹</button>
+        <div class="date-box">
+            <div class="date-main">设置</div>
+            <div class="date-sub">类型 · 收购方</div>
+        </div>
+        <div style="width:38px"></div>
+    </header>
+    <div class="settings-content" id="settingsContent"></div>
+</div>
+
+<div class="mask" id="mask"></div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+    /* ============================================================
+       基础工具
+       ============================================================ */
+    const $ = (s, r = document) => r.querySelector(s);
+    const pad = n => String(n).padStart(2, '0');
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const round2 = n => Math.round((+n + Number.EPSILON) * 100) / 100;
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+      c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmtMoney = n => '¥' + round2(n).toFixed(2);
+    const fmtSigned = n => {
+      const v = round2(n);
+      if (v > 0) return '+¥' + v.toFixed(2);
+      if (v < 0) return '-¥' + Math.abs(v).toFixed(2);
+      return '¥0.00';
+    };
+    const fmtNum = n => String(round2(n));
+    const fmtProfitShort = v => {
+      if (Math.abs(v) < 0.005) return '';
+      const abs = Math.abs(v);
+      let s;
+      if (abs >= 10000) s = (abs / 10000).toFixed(1).replace(/\.0$/, '') + '万';
+      else if (abs >= 1000) s = (abs / 1000).toFixed(1).replace(/\.0$/, '') + '千';
+      else s = String(Math.round(abs));
+      return (v > 0 ? '+' : '-') + s;
+    };
+    const fmtProfitMoney = v => {
+      if (Math.abs(v) < 0.005) return '¥0.00';
+      return (v > 0 ? '+¥' : '-¥') + Math.abs(v).toFixed(2);
+    };
+    const profitColor = v => v > 0 ? '#C0762B' : (v < 0 ? '#4C9A6E' : '#C4B9A8');
+    const fmtHM = ts => {
+      if (!ts) return '';
+      const d = new Date(ts);
+      return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+
+    /* 取整规则：
+       1. 有小数 → 取整小数（向上到整数）
+       2. 整数：若为“第一位非零、后面全0”（如 3000、5000、1000）→ 不提供取整
+       3. 否则按最低非零位向上进一级（如 1235→1240，1240→1300，1300→2000） */
+    function getNextRoundUp(v) {
+      if (!(v > 0)) return null;
+      const raw = +v;
+      const EPS = 0.005;
+
+      // 有小数
+      if (Math.abs(raw - Math.round(raw)) > EPS) {
+        return { value: Math.ceil(raw), label: '取整小数' };
+      }
+
+      const iv = Math.round(raw);
+      const s = String(iv);
+      // 第一位非零，后面全是0 → 不提供取整
+      if (/^[1-9]0*$/.test(s)) return null;
+
+      if (iv % 10 !== 0) {
+        return { value: Math.ceil(iv / 10) * 10, label: '取整个位' };
+      }
+      if (iv >= 10 && Math.floor(iv / 10) % 10 !== 0) {
+        return { value: Math.ceil(iv / 100) * 100, label: '取整十位' };
+      }
+      if (iv >= 100 && Math.floor(iv / 100) % 10 !== 0) {
+        return { value: Math.ceil(iv / 1000) * 1000, label: '取整百位' };
+      }
+      if (iv >= 1000 && Math.floor(iv / 1000) % 10 !== 0) {
+        return { value: Math.ceil(iv / 10000) * 10000, label: '取整千位' };
+      }
+      if (iv >= 10000 && Math.floor(iv / 10000) % 10 !== 0) {
+        return { value: Math.ceil(iv / 100000) * 100000, label: '取整万位' };
+      }
+      return null;
+    }
+
+    function dateStr(d = new Date()) {
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+    function parseDate(s) {
+      const [y, m, d] = s.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+    function ymd(y, m, d) {
+      return dateStr(new Date(y, m, d));
+    }
+    const WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    function dateLabel(s) {
+      const d = parseDate(s);
+      return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+    }
+    function weekLabel(s) { return WEEK[parseDate(s).getDay()]; }
+    function shiftDate(s, n) {
+      const d = parseDate(s);
+      d.setDate(d.getDate() + n);
+      return dateStr(d);
+    }
+    function encodePwd(p) {
+      try { return btoa(unescape(encodeURIComponent(p))); }
+      catch (e) { return 'p:' + p; }
+    }
+
+    /* ============================================================
+       存储
+       ============================================================ */
+    const STORE_KEY = 'peanut_ledger_v6';
+    const V2_KEY = 'peanut_ledger_v2';
+
+    let store = { users: {}, guest: null, session: null, migrated: false };
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') store = Object.assign(store, parsed);
+      }
+    } catch (e) {}
+
+    function saveStore() {
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) {}
+    }
+
+    function defaultSettings() {
+      return {
+        buyTypes: ['花生米', '花生果', '油料米', '白沙米', '海花米', '种子米'],
+        sellTypes: ['商品米', '商品果', '油料米', '下料米', '花生米'],
+        buyers: ['鲁南油厂'],
+        privacyMode: false
+      };
+    }
+
+    if (!store.guest || typeof store.guest !== 'object') {
+      store.guest = { pwd: null, settings: defaultSettings(), days: {}, lastSync: 0 };
+    }
+    if (!store.guest.days) store.guest.days = {};
+    if (!store.guest.settings) store.guest.settings = defaultSettings();
+    if (!store.users) store.users = {};
+
+    /* ============================================================
+       当前用户
+       ============================================================ */
+    function U() {
+      if (store.session && store.users[store.session]) return store.users[store.session];
+      return store.guest;
+    }
+
+    function isPrivacy() {
+      const u = U();
+      return !!(u && u.settings && u.settings.privacyMode);
+    }
+
+    function getDayData(date) {
+      const u = U();
+      if (!u) return { buys: [], sells: [], remark: '' };
+      if (!u.days) u.days = {};
+      if (!u.days[date]) u.days[date] = { buys: [], sells: [], remark: '' };
+      const d = u.days[date];
+      if (!Array.isArray(d.buys)) d.buys = [];
+      if (!Array.isArray(d.sells)) d.sells = [];
+      if (typeof d.remark !== 'string') d.remark = '';
+      return d;
+    }
+
+    let currentDate = dateStr();
+    let lastToday = dateStr();
+    let tab = 'buy';
+    let view = 'app';
+
+    let revealedEntryId = null;
+    let lastCardTap = { id: null, time: 0 };
+    const DBL_MS = 350;
+
+    function curList() {
+      const d = getDayData(currentDate);
+      return tab === 'buy' ? d.buys : d.sells;
+    }
+    function findEntry(id) { return curList().find(e => e.id === id); }
+
+    /* 金额计算 */
+    function itemAmount(it) {
+      if (it.manualAmount !== null && it.manualAmount !== undefined) return round2(it.manualAmount);
+      return round2((it.weight || 0) * (it.price || 0));
+    }
+    function typeSubtotal(t) { return round2(t.items.reduce((s, it) => s + itemAmount(it), 0)); }
+    function entryTotal(e) { return round2(e.types.reduce((s, t) => s + typeSubtotal(t), 0)); }
+
+    function entryFinal(e) {
+      const total = entryTotal(e);
+      if (e.finalOverride !== null && e.finalOverride !== undefined) {
+        return round2(e.finalOverride);
+      }
+      return round2(total + (e.adjust || 0));
+    }
+
+    function statsOfDayPure(date) {
+      const u = U();
+      const d = u && u.days && u.days[date];
+      if (!d) return { buy: 0, sell: 0, profit: 0, has: false };
+      const sum = list => round2((list || []).reduce((s, e) => s + entryFinal(e), 0));
+      const buy = sum(d.buys);
+      const sell = sum(d.sells);
+      return { buy, sell, profit: round2(sell - buy), has: true };
+    }
+
+    function monthSummary(year, month) {
+      const u = U();
+      const prefix = `${year}-${pad(month)}-`;
+      let buy = 0, sell = 0;
+      Object.keys(u.days || {}).forEach(k => {
+        if (k.startsWith(prefix)) {
+          const s = statsOfDayPure(k);
+          buy += s.buy;
+          sell += s.sell;
+        }
+      });
+      return { buy: round2(buy), sell: round2(sell), profit: round2(sell - buy) };
+    }
+
+    function yearSummary(year) {
+      const u = U();
+      const prefix = `${year}-`;
+      let buy = 0, sell = 0;
+      Object.keys(u.days || {}).forEach(k => {
+        if (k.startsWith(prefix)) {
+          const s = statsOfDayPure(k);
+          buy += s.buy;
+          sell += s.sell;
+        }
+      });
+      return { buy: round2(buy), sell: round2(sell), profit: round2(sell - buy) };
+    }
+
+    function dayStats(date) {
+      const d = getDayData(date);
+      const buy = round2(d.buys.reduce((s, e) => s + entryFinal(e), 0));
+      const sell = round2(d.sells.reduce((s, e) => s + entryFinal(e), 0));
+      return { buy, sell, profit: round2(sell - buy) };
+    }
+
+    function dayHasUnsettled(date) {
+      const u = U();
+      const d = u && u.days && u.days[date];
+      if (!d || !Array.isArray(d.sells)) return false;
+      return d.sells.some(s => !s.settled);
+    }
+    function monthHasUnsettled(year, month) {
+      const u = U();
+      if (!u || !u.days) return false;
+      const prefix = `${year}-${pad(month)}-`;
+      return Object.keys(u.days).some(k => k.startsWith(prefix) && dayHasUnsettled(k));
+    }
+    function yearHasUnsettled(year) {
+      const u = U();
+      if (!u || !u.days) return false;
+      const prefix = `${year}-`;
+      return Object.keys(u.days).some(k => k.startsWith(prefix) && dayHasUnsettled(k));
+    }
+
+    function nextFarmerName(list) {
+      const used = new Set(list.map(e => e.name));
+      let i = 1;
+      while (used.has('户' + i)) i++;
+      return '户' + i;
+    }
+
+    function findLastPrice(fid, tid) {
+      const e = findEntry(fid);
+      if (!e) return null;
+      const t = e.types.find(x => x.id === tid);
+      if (t && t.items.length) {
+        return t.items[t.items.length - 1].price;
+      }
+      const curName = tab === 'buy' ? e.name : e.buyer;
+      const curType = t ? t.name : '';
+      if (!curName || !curType) return null;
+      const u = U();
+      if (!u || !u.days) return null;
+      const dates = Object.keys(u.days).sort().reverse();
+      for (const d of dates) {
+        if (d === currentDate) continue;
+        const day = u.days[d];
+        if (!day) continue;
+        const list = tab === 'buy' ? day.buys : day.sells;
+        const match = (list || []).find(x => (tab === 'buy' ? x.name : x.buyer) === curName);
+        if (match) {
+          const mt = (match.types || []).find(x => x.name === curType);
+          if (mt && mt.items && mt.items.length) {
+            return mt.items[mt.items.length - 1].price;
+          }
+        }
+      }
+      return null;
+    }
+
+    /* ============================================================
+       视图切换
+       ============================================================ */
+    function showView(v) {
+      view = v;
+      $('#appView').hidden = v !== 'app';
+      $('#settingsView').hidden = v !== 'settings';
+    }
+
+    /* ============================================================
+       渲染
+       ============================================================ */
+    function renderDate() {
+      $('#dateMainText').textContent = dateLabel(currentDate);
+      const isToday = currentDate === dateStr();
+      $('#dateSub').innerHTML = isToday
+        ? `${weekLabel(currentDate)} · 今天`
+        : `${weekLabel(currentDate)} · <span class="back-today" data-act="back-today">回到今天</span>`;
+    }
+
+    function renderSeg() {
+      document.querySelectorAll('.seg-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === tab);
+      });
+    }
+
+    function updatePrivacyBtn() {
+      const pb = $('#privacyBtn');
+      if (!pb) return;
+      const on = isPrivacy();
+      pb.textContent = on ? '🙈' : '👁';
+      pb.classList.toggle('privacy-on', on);
+    }
+
+    function renderDayRemark(remark) {
+      if (!remark) return '';
+      return `<div class="day-remark" data-act="edit-day-remark">
+        <span class="dr-ico">📝</span><span>${esc(remark)}</span>
+      </div>`;
+    }
+
+    function renderEntryCard(e, kind) {
+      const isBuy = kind === 'buy';
+      const title = isBuy ? e.name : e.buyer;
+      const initial = String(title || '?').slice(0, 1);
+      const total = entryTotal(e);
+      const final = entryFinal(e);
+      const adj = round2(final - total);
+      const finalLabel = isBuy ? '实付' : '实收';
+
+      const priv = isPrivacy();
+      const revealed = priv && revealedEntryId === e.id;
+      const reveal = !priv || revealed;
+
+      const money = v => reveal ? fmtMoney(v) : '****';
+      const timeTxt = e.createdAt ? fmtHM(e.createdAt) : '';
+
+      const adjLabel = adj > 0
+        ? (isBuy ? '多付' : '多收')
+        : (isBuy ? '少付' : '少收');
+      const adjVal = reveal ? Math.abs(adj).toFixed(2) : '****';
+
+      return `
+      <section class="farmer-card ${revealed ? 'revealed' : ''}" data-card-id="${e.id}">
+        <header class="farmer-head">
+          <div class="farmer-name">
+            <span class="avatar ${isBuy ? 'buy' : 'sell'}">${esc(initial)}</span>
+            <span>${esc(title)}</span>
+            ${!isBuy ? `<span class="settle-tag ${e.settled ? 'settled' : 'unsettled'}">${e.settled ? '已结清' : '赊账'}</span>` : ''}
+            ${revealed ? '<span class="reveal-badge">👁 已显示</span>' : ''}
+          </div>
+          <div class="head-right">
+            ${timeTxt ? `<span class="entry-time">${timeTxt}</span>` : ''}
+            <button class="icon-btn" data-act="entry-menu" data-farmer="${e.id}">⋮</button>
+          </div>
+        </header>
+        ${e.remark ? `<div class="remark-row" data-act="edit-remark" data-farmer="${e.id}">${esc(e.remark)}</div>` : ''}
+        <div class="types">
+          ${e.types.length
+            ? e.types.map(t => renderType(e.id, t, reveal)).join('')
+            : '<div class="no-type">还没有花生类型，先添加一个吧</div>'}
+        </div>
+        <button class="add-type-btn" data-act="add-type" data-farmer="${e.id}">+ 添加花生类型</button>
+        <footer class="farmer-foot">
+          <div class="foot-row"><span>合计</span><b class="mono">${money(total)}</b></div>
+          ${adj !== 0 ? `
+          <div class="foot-row adj"><span>${adjLabel}</span><b class="mono">${adjVal}</b></div>` : ''}
+          <div class="foot-row final clickable" data-act="edit-final" data-farmer="${e.id}">
+            <span>${finalLabel}<em class="edit-ico">✎</em></span>
+            <b class="mono">${money(final)}</b>
+          </div>
+        </footer>
+      </section>`;
+    }
+
+    function renderType(fid, t, reveal) {
+      const money = v => reveal ? fmtMoney(v) : '****';
+      return `
+      <div class="type-group">
+        <div class="type-head">
+          <span class="type-name">${esc(t.name)}</span>
+          <span class="type-sum mono">${money(typeSubtotal(t))}</span>
+        </div>
+        <div class="items">
+          ${t.items.map(it => renderItem(fid, t.id, it, reveal)).join('')}
+        </div>
+        <button class="add-item-btn" data-act="add-item" data-farmer="${fid}" data-type="${t.id}">+ 新增称</button>
+      </div>`;
+    }
+
+    function renderItem(fid, tid, it, reveal) {
+      const manual = it.manualAmount !== null && it.manualAmount !== undefined;
+      const price = reveal ? fmtNum(it.price) : '****';
+      const amount = reveal ? fmtMoney(itemAmount(it)) : '****';
+      return `
+      <div class="item-row" data-act="edit-item" data-farmer="${fid}" data-type="${tid}" data-item="${it.id}">
+        <div class="item-left">
+          <span class="w mono">${fmtNum(it.weight)}</span><span class="u">斤</span>
+          <span class="x">×</span>
+          <span class="p mono">${price}</span><span class="u">元</span>
+          ${manual && reveal ? '<span class="tag">改</span>' : ''}
+        </div>
+        <div class="item-right mono">${amount}</div>
+      </div>`;
+    }
+
+    function emptyHTML(kind) {
+      return kind === 'buy'
+        ? `<div class="empty">
+             <div class="empty-ico">🥜</div>
+             <p>这一天还没有采购记录</p>
+             <p class="empty-sub">点击下方「新增农户」开始记账</p>
+           </div>`
+        : `<div class="empty">
+             <div class="empty-ico">🧾</div>
+             <p>这一天还没有销售记录</p>
+             <p class="empty-sub">点击下方「新增收购」开始记账</p>
+           </div>`;
+    }
+
+    function updateBottom() {
+      const st = dayStats(currentDate);
+      const plValue = $('#plValue');
+      if (isPrivacy()) {
+        plValue.textContent = '****';
+        plValue.className = 'pl-value masked';
+        $('#plSub').textContent = '采购 **** · 销售 ****';
+      } else {
+        plValue.textContent = fmtSigned(st.profit);
+        plValue.className = 'pl-value ' + (st.profit >= 0 ? 'profit' : 'loss');
+        $('#plSub').textContent = `采购 ${fmtMoney(st.buy)} · 销售 ${fmtMoney(st.sell)}`;
+      }
+      $('#mainAddBtn').textContent = tab === 'buy' ? '+ 新增农户' : '+ 新增收购';
+    }
+
+    function render() {
+      if (view !== 'app') return;
+      renderDate();
+      renderSeg();
+      updatePrivacyBtn();
+      const day = getDayData(currentDate);
+      const list = tab === 'buy' ? day.buys : day.sells;
+      const box = $('#content');
+      box.innerHTML = renderDayRemark(day.remark)
+        + (list.length ? list.map(e => renderEntryCard(e, tab)).join('') : emptyHTML(tab));
+      updateBottom();
+    }
+
+    /* ============================================================
+       设置页
+       ============================================================ */
+    function renderSettings() {
+      if (!U()) return;
+      const s = U().settings;
+      $('#settingsContent').innerHTML = `
+        ${renderSetBlock('采购花生类型', 'buyTypes', s.buyTypes, '例如：特大果')}
+        ${renderSetBlock('销售花生类型', 'sellTypes', s.sellTypes, '例如：统货米')}
+        ${renderSetBlock('收购方', 'buyers', s.buyers, '例如：某某油厂')}
+        <button class="btn danger-outline logout-btn" data-act="clear-all">清空所有记账数据</button>
+      `;
+    }
+
+    function renderSetBlock(title, kind, list, placeholder) {
+      return `
+        <section class="set-block">
+          <div class="set-title">${title}</div>
+          <div class="set-chips">
+            ${list.length
+              ? list.map(n => `<span class="set-chip">${esc(n)}<button data-act="del-setting" data-kind="${kind}" data-name="${esc(n)}">×</button></span>`).join('')
+              : '<span class="set-empty">暂无，可在下方添加</span>'}
+          </div>
+          <div class="set-add">
+            <input id="add_${kind}" class="input" type="text" placeholder="${placeholder}">
+            <button class="set-add-btn" data-act="add-setting" data-kind="${kind}">添加</button>
+          </div>
+        </section>
+      `;
+    }
+
+    /* ============================================================
+       弹层
+       ============================================================ */
+    function openSheet(html) {
+      $('#sheet').innerHTML = html;
+      $('#mask').classList.add('show');
+      $('#sheet').classList.add('show');
+    }
+    function closeSheet() {
+      $('#mask').classList.remove('show');
+      $('#sheet').classList.remove('show');
+    }
+
+    let toastTimer;
+    function toast(msg) {
+      const t = $('#toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('show'), 1600);
+    }
+
+    let pendingConfirm = null;
+    function confirmSheet(title, cb) {
+      pendingConfirm = cb;
+      openSheet(`
+        <h3 class="sheet-title">${title}</h3>
+        <div class="sheet-actions">
+          <button class="btn ghost" data-act="close-sheet">取消</button>
+          <button class="btn danger" data-act="confirm-ok">确定</button>
+        </div>
+      `);
+    }
+
+    /* ============================================================
+       更多菜单 / 登录 / 同步
+       ============================================================ */
+    function openMoreMenu() {
+      const d = getDayData(currentDate);
+      const hasRemark = !!d.remark;
+      const loggedIn = !!store.session && !!store.users[store.session];
+
+      openSheet(`
+        <h3 class="sheet-title">更多</h3>
+        <div class="action-list">
+          <button class="action-item" data-act="edit-day-remark">📝 ${hasRemark ? '编辑备注' : '添加备注'}</button>
+          <button class="action-item" data-act="open-settings">⚙ 设置</button>
+          ${loggedIn
+            ? `<button class="action-item" data-act="open-login">☁️ 已登录：${esc(store.session)}</button>`
+            : `<button class="action-item" data-act="open-login">☁️ 登录以同步数据</button>`}
+        </div>
+        <button class="btn ghost" style="width:100%" data-act="close-sheet">取消</button>
+      `);
+    }
+
+    function openLoginSheet() {
+      if (store.session && store.users[store.session]) {
+        const u = store.users[store.session];
+        const syncTime = u.lastSync ? new Date(u.lastSync).toLocaleString('zh-CN') : '从未同步';
+        openSheet(`
+          <h3 class="sheet-title">账号</h3>
+          <div style="display:flex;align-items:center;gap:12px;background:#F8F2E8;border-radius:14px;padding:14px;margin-bottom:14px">
+            <div style="width:46px;height:46px;border-radius:50%;background:linear-gradient(140deg,#F0C08A,#D08C46);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700">
+              ${esc(store.session.slice(0, 1).toUpperCase())}
+            </div>
+            <div>
+              <div style="font-size:17px;font-weight:700">${esc(store.session)}</div>
+              <div style="font-size:12px;color:#8B8178;margin-top:2px">上次同步：${syncTime}</div>
+            </div>
+          </div>
+          <button class="btn primary" style="width:100%;margin-bottom:10px" data-act="sync-now">立即同步到云端</button>
+          <button class="btn danger-outline" style="width:100%;margin-bottom:10px" data-act="logout">退出登录</button>
+          <button class="btn ghost" style="width:100%" data-act="close-sheet">关闭</button>
+        `);
+      } else {
+        openSheet(`
+          <h3 class="sheet-title">登录 / 注册</h3>
+          <div class="hint" style="margin-bottom:14px">登录后可将本地数据同步到云端账号<br>不登录也能继续本地使用</div>
+          <label class="field">
+            <span>用户名</span>
+            <input id="loginUser" class="input" type="text" placeholder="输入用户名" autocomplete="username">
+          </label>
+          <label class="field">
+            <span>密码</span>
+            <input id="loginPwd" class="input" type="password" placeholder="输入密码" autocomplete="current-password">
+          </label>
+          <label class="sync-check">
+            <input type="checkbox" id="syncLocalCheck" checked>
+            <span>将当前本地数据同步到此账号</span>
+          </label>
+          <div class="sheet-actions">
+            <button class="btn ghost" data-act="close-sheet">取消</button>
+            <button class="btn primary" data-act="do-login">登录 / 注册</button>
+          </div>
+        `);
+        setTimeout(() => {
+          const el = $('#loginUser');
+          if (el) el.focus();
+        }, 200);
+      }
+    }
+
+    function mergeGuestIntoUser(user) {
+      const g = store.guest;
+      if (!g || !g.days) return;
+      if (!user.days) user.days = {};
+      Object.keys(g.days).forEach(date => {
+        const gd = g.days[date];
+        if (!gd) return;
+        if (!user.days[date]) {
+          user.days[date] = JSON.parse(JSON.stringify(gd));
+        } else {
+          const ud = user.days[date];
+          if (!Array.isArray(ud.buys)) ud.buys = [];
+          if (!Array.isArray(ud.sells)) ud.sells = [];
+          (gd.buys || []).forEach(b => ud.buys.push(b));
+          (gd.sells || []).forEach(s => ud.sells.push(s));
+          if (!ud.remark && gd.remark) ud.remark = gd.remark;
+        }
+      });
+    }
+
+    function doLoginAction() {
+      const u = ($('#loginUser').value || '').trim();
+      const p = $('#loginPwd').value || '';
+      const syncLocal = $('#syncLocalCheck').checked;
+      if (!u) { toast('请输入用户名'); return; }
+      if (!p) { toast('请输入密码'); return; }
+
+      const existing = store.users[u];
+      if (existing) {
+        if (existing.pwd !== encodePwd(p)) { toast('密码不正确'); return; }
+        if (syncLocal) mergeGuestIntoUser(existing);
+        store.session = u;
+        saveStore();
+        closeSheet();
+        revealedEntryId = null;
+        render();
+        toast(syncLocal ? '登录成功，本地数据已合并' : '登录成功');
+      } else {
+        const newUser = { pwd: encodePwd(p), settings: defaultSettings(), days: {}, lastSync: 0 };
+        if (syncLocal && store.guest) {
+          newUser.days = JSON.parse(JSON.stringify(store.guest.days || {}));
+          newUser.settings = JSON.parse(JSON.stringify(store.guest.settings || defaultSettings()));
+        }
+        store.users[u] = newUser;
+        store.session = u;
+        saveStore();
+        closeSheet();
+        revealedEntryId = null;
+        render();
+        toast(syncLocal ? '账号已创建，本地数据已同步' : '账号已创建');
+      }
+    }
+
+    /* ============================================================
+       日历
+       ============================================================ */
+    let calMode = 'day';
+    let calAnchor = dateStr();
+
+    function openCalendar() {
+      calMode = 'day';
+      calAnchor = currentDate;
+      drawCalendar();
+    }
+
+    function renderCalSummary(sm, label) {
+      const priv = isPrivacy();
+      return `
+        <div class="cal-summary">
+          <div class="cs-item">
+            <span class="cs-label">${label}支出</span>
+            <span class="cs-val ${priv ? 'masked' : ''}">${priv ? '****' : fmtMoney(sm.buy)}</span>
+          </div>
+          <div class="cs-item">
+            <span class="cs-label">${label}收入</span>
+            <span class="cs-val ${priv ? 'masked' : ''}">${priv ? '****' : fmtMoney(sm.sell)}</span>
+          </div>
+          <div class="cs-item">
+            <span class="cs-label">${label}收支</span>
+            <span class="cs-val ${priv ? 'masked' : (sm.profit >= 0 ? 'profit' : 'loss')}">${priv ? '****' : fmtSigned(sm.profit)}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function drawCalendar() {
+      const a = parseDate(calAnchor);
+      let summaryHtml = '';
+      if (calMode === 'day') {
+        const sm = monthSummary(a.getFullYear(), a.getMonth() + 1);
+        summaryHtml = renderCalSummary(sm, '本月');
+      } else if (calMode === 'month') {
+        const sy = yearSummary(a.getFullYear());
+        summaryHtml = renderCalSummary(sy, a.getFullYear() + '年');
+      } else {
+        const start = a.getFullYear() - 5;
+        let buy = 0, sell = 0;
+        for (let y = start; y < start + 12; y++) {
+          const sy = yearSummary(y);
+          buy += sy.buy;
+          sell += sy.sell;
+        }
+        summaryHtml = renderCalSummary({ buy: round2(buy), sell: round2(sell), profit: round2(sell - buy) }, '近12年');
+      }
+
+      const body = calMode === 'day' ? renderCalDay()
+        : calMode === 'month' ? renderCalMonth()
+        : renderCalYear();
+
+      openSheet(`
+        <h3 class="sheet-title" style="margin-bottom:10px">选择日期</h3>
+        ${summaryHtml}
+        ${body}
+        <div class="sheet-actions" style="margin-top:14px">
+          <button class="btn ghost" data-act="cal-today" style="flex:1">回到今天</button>
+          <button class="btn primary" data-act="close-sheet" style="flex:1">关闭</button>
+        </div>
+      `);
+      const sh = $('#sheet');
+      if (sh) sh.scrollTop = 0;
+    }
+
+    function renderCalDay() {
+      const a = parseDate(calAnchor);
+      const y = a.getFullYear(), m = a.getMonth();
+      const firstWeekday = new Date(y, m, 1).getDay();
+      const dim = new Date(y, m + 1, 0).getDate();
+      const prevDim = new Date(y, m, 0).getDate();
+      const cells = [];
+
+      for (let i = firstWeekday - 1; i >= 0; i--) {
+        const d = prevDim - i;
+        cells.push({ date: ymd(y, m - 1, d), dnum: d, other: true });
+      }
+      for (let d = 1; d <= dim; d++) {
+        cells.push({ date: ymd(y, m, d), dnum: d, other: false });
+      }
+      let n = 1;
+      while (cells.length % 7 !== 0) {
+        cells.push({ date: ymd(y, m + 1, n), dnum: n, other: true });
+        n++;
+      }
+
+      const today = dateStr();
+      const priv = isPrivacy();
+      const grid = cells.map(c => {
+        const st = statsOfDayPure(c.date);
+        const prof = st.profit;
+        const cls = ['cal-cell'];
+        if (c.other) cls.push('other');
+        if (c.date === today) cls.push('today');
+        if (c.date === currentDate) cls.push('selected');
+        const profHtml = (!priv && Math.abs(prof) >= 0.005)
+          ? `<span class="dprofit" style="color:${profitColor(prof)}">${fmtProfitShort(prof)}</span>`
+          : '';
+        const unsettledHtml = dayHasUnsettled(c.date) ? '<span class="unsettled-dot"></span>' : '';
+        return `<div class="${cls.join(' ')}" data-act="cal-pick" data-date="${c.date}">
+          ${unsettledHtml}
+          <span class="dnum">${c.dnum}</span>${profHtml}
+        </div>`;
+      }).join('');
+
+      return `
+        <div class="cal-head">
+          <button class="cal-nav" data-act="cal-prev">‹</button>
+          <button class="cal-title" data-act="cal-mode">${y}年${m + 1}月 <span class="cal-mode-tag">日</span></button>
+          <button class="cal-nav" data-act="cal-next">›</button>
+        </div>
+        <div class="cal-week">${['日','一','二','三','四','五','六'].map(w => `<span>${w}</span>`).join('')}</div>
+        <div class="cal-grid">${grid}</div>
+      `;
+    }
+
+    function renderCalMonth() {
+      const y = parseDate(calAnchor).getFullYear();
+      const cd = parseDate(currentDate);
+      const curY = cd.getFullYear();
+      const curM = cd.getMonth() + 1;
+      const todayD = new Date();
+      const priv = isPrivacy();
+      let cells = '';
+      for (let m = 1; m <= 12; m++) {
+        const st = monthSummary(y, m);
+        const cls = ['cal-mcell'];
+        if (y === curY && m === curM) cls.push('cur');
+        if (y === todayD.getFullYear() && m === todayD.getMonth() + 1) cls.push('today-month');
+        const txt = priv ? '****' : (Math.abs(st.profit) >= 0.005 ? fmtProfitMoney(st.profit) : '—');
+        const unsettledHtml = monthHasUnsettled(y, m) ? '<span class="unsettled-dot"></span>' : '';
+        cells += `<div class="${cls.join(' ')}" data-act="cal-pick-month" data-year="${y}" data-month="${m}">
+          ${unsettledHtml}
+          <div class="mnum">${m}月</div>
+          <div class="mprofit" style="color:${!priv && Math.abs(st.profit) >= 0.005 ? profitColor(st.profit) : '#C4B9A8'}">${txt}</div>
+        </div>`;
+      }
+      return `
+        <div class="cal-head">
+          <button class="cal-nav" data-act="cal-prev">‹</button>
+          <button class="cal-title" data-act="cal-mode">${y}年 <span class="cal-mode-tag">月</span></button>
+          <button class="cal-nav" data-act="cal-next">›</button>
+        </div>
+        <div class="cal-grid-month">${cells}</div>
+      `;
+    }
+
+    function renderCalYear() {
+      const ay = parseDate(calAnchor).getFullYear();
+      const start = ay - 5;
+      const curY = parseDate(currentDate).getFullYear();
+      const priv = isPrivacy();
+      let cells = '';
+      for (let y = start; y < start + 12; y++) {
+        const st = yearSummary(y);
+        const cls = ['cal-mcell'];
+        if (y === curY) cls.push('cur');
+        const txt = priv ? '****' : (Math.abs(st.profit) >= 0.005 ? fmtProfitMoney(st.profit) : '—');
+        const unsettledHtml = yearHasUnsettled(y) ? '<span class="unsettled-dot"></span>' : '';
+        cells += `<div class="${cls.join(' ')}" data-act="cal-pick-year" data-year="${y}">
+          ${unsettledHtml}
+          <div class="mnum">${y}年</div>
+          <div class="mprofit" style="color:${!priv && Math.abs(st.profit) >= 0.005 ? profitColor(st.profit) : '#C4B9A8'}">${txt}</div>
+        </div>`;
+      }
+      return `
+        <div class="cal-head">
+          <button class="cal-nav" data-act="cal-prev">‹</button>
+          <button class="cal-title" data-act="cal-mode">${start}–${start + 11}年 <span class="cal-mode-tag">年</span></button>
+          <button class="cal-nav" data-act="cal-next">›</button>
+        </div>
+        <div class="cal-grid-month">${cells}</div>
+      `;
+    }
+
+    /* ============================================================
+       每日备注
+       ============================================================ */
+    function openDayRemarkForm() {
+      const d = getDayData(currentDate);
+      const has = !!d.remark;
+      openSheet(`
+        <h3 class="sheet-title">${has ? '编辑备注' : '添加备注'}</h3>
+        <label class="field">
+          <span>备注</span>
+          <input id="dayRemarkInput" class="input" type="text" value="${esc(d.remark || '')}" placeholder="例如：下雨，只收半天">
+        </label>
+        <div class="sheet-actions">
+          ${has ? `<button class="btn danger-ghost" data-act="delete-day-remark">清除</button>` : ''}
+          <button class="btn ghost" data-act="close-sheet">取消</button>
+          <button class="btn primary" data-act="save-day-remark">保存</button>
+        </div>
+      `);
+      setTimeout(() => {
+        const el = $('#dayRemarkInput');
+        if (el) { el.focus(); el.select(); }
+      }, 200);
+    }
+
+    /* ============================================================
+       修改实付 / 实收
+       ============================================================ */
+    function openFinalForm(id) {
+      const e = findEntry(id);
+      if (!e) return;
+      const total = entryTotal(e);
+      const final = entryFinal(e);
+      const isBuy = tab === 'buy';
+      const finalLabel = isBuy ? '实付' : '实收';
+      const totalLabel = isBuy ? '应付合计' : '应收合计';
+      const floorVal = Math.floor(total);
+      const cents = round2(total - floorVal);
+
+      const initNext = getNextRoundUp(final);
+      const roundLabel = initNext ? initNext.label : '取整';
+      const roundHidden = !initNext;
+
+      openSheet(`
+        <h3 class="sheet-title">修改${finalLabel}</h3>
+        <div class="hint">${totalLabel} <b>${fmtMoney(total)}</b></div>
+        <div class="chips">
+          ${cents > 0 ? `<button class="chip" data-act="final-set" data-val="${floorVal}">抹零至 ${floorVal}</button>` : ''}
+          <button class="chip" id="roundBtn" data-act="final-round-up" ${roundHidden ? 'style="display:none"' : ''}>${roundLabel}</button>
+          <button class="chip" data-act="final-set" data-val="${total}">恢复原价</button>
+        </div>
+        <label class="field">
+          <span>${finalLabel}（元）</span>
+          <input id="finalInput" class="input" type="number" step="0.01" inputmode="decimal" value="${final.toFixed(2)}">
+        </label>
+        <div class="hint" id="adjLive"></div>
+        <div class="sheet-actions">
+          <button class="btn ghost" data-act="close-sheet">取消</button>
+          <button class="btn primary" data-act="save-final" data-farmer="${id}">保存</button>
+        </div>
+      `);
+
+      const inp = $('#finalInput');
+      const live = $('#adjLive');
+
+      function refresh() {
+        const v = parseFloat(inp.value) || 0;
+        const diff = round2(v - total);
+        if (Math.abs(diff) < 0.005) {
+          live.innerHTML = '未调整';
+        } else {
+          const label = diff > 0
+            ? (isBuy ? '多付' : '多收')
+            : (isBuy ? '少付' : '少收');
+          live.innerHTML = `${label} <b>${Math.abs(diff).toFixed(2)}</b>`;
+        }
+
+        const btn = $('#roundBtn');
+        if (btn) {
+          const next = getNextRoundUp(v);
+          if (next) {
+            btn.textContent = next.label;
+            btn.style.display = '';
+          } else {
+            btn.style.display = 'none';
+          }
+        }
+      }
+      inp.addEventListener('input', refresh);
+      refresh();
+    }
+
+    /* ============================================================
+       新增农户（仅名称） / 新增收购（仅收购方）
+       ============================================================ */
+    function openEntryForm(kind) {
+      if (kind === 'buy') {
+        const defaultName = nextFarmerName(getDayData(currentDate).buys);
+        openSheet(`
+          <h3 class="sheet-title">新增农户</h3>
+          <label class="field">
+            <span>农户名称</span>
+            <input id="eName" class="input" type="text" value="${esc(defaultName)}" autocomplete="off">
+          </label>
+          <div class="sheet-actions">
+            <button class="btn ghost" data-act="close-sheet">取消</button>
+            <button class="btn primary" data-act="save-entry" data-kind="buy">保存</button>
+          </div>
+        `);
+        setTimeout(() => {
+          const el = $('#eName');
+          if (el) { el.focus(); el.select(); }
+        }, 200);
+      } else {
+        const buyers = U().settings.buyers;
+        openSheet(`
+          <h3 class="sheet-title">新增收购记录</h3>
+          <label class="field">
+            <span>收购方</span>
+            <select id="eBuyer" class="input">
+              <option value="">请选择收购方</option>
+              ${buyers.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('')}
+              <option value="__new__">＋ 新增收购方...</option>
+            </select>
+          </label>
+          <label class="field" id="newBuyerWrap" hidden>
+            <span>新收购方名称</span>
+            <input id="newBuyerName" class="input" type="text" placeholder="输入收购方名称" autocomplete="off">
+          </label>
+          <div class="sheet-actions">
+            <button class="btn ghost" data-act="close-sheet">取消</button>
+            <button class="btn primary" data-act="save-entry" data-kind="sell">保存</button>
+          </div>
+        `);
+        const sel = $('#eBuyer');
+        sel.addEventListener('change', () => {
+          const wrap = $('#newBuyerWrap');
+          wrap.hidden = sel.value !== '__new__';
+          if (sel.value === '__new__') {
+            setTimeout(() => { const el = $('#newBuyerName'); if (el) el.focus(); }, 100);
+          }
+        });
+      }
+    }
+
+    /* ============================================================
+       花生类型
+       ============================================================ */
+    function openTypeForm(fid) {
+      const presets = tab === 'buy' ? U().settings.buyTypes : U().settings.sellTypes;
+      openSheet(`
+        <h3 class="sheet-title">选择花生类型</h3>
+        <div class="chips">
+          ${presets.length
+            ? presets.map(n => `<button class="chip" data-act="pick-type" data-farmer="${fid}" data-name="${esc(n)}">${esc(n)}</button>`).join('')
+            : '<span class="set-empty">还没有预设类型，可在设置中添加</span>'}
+        </div>
+        <label class="field">
+          <span>或自定义类型</span>
+          <input id="tName" class="input" type="text" placeholder="输入类型名称" autocomplete="off">
+        </label>
+        <div class="sheet-actions">
+          <button class="btn ghost" data-act="close-sheet">取消</button>
+          <button class="btn primary" data-act="save-type" data-farmer="${fid}">保存</button>
+        </div>
+      `);
+    }
+
+    /* ============================================================
+       称
+       ============================================================ */
+    function findItem(fid, tid, iid) {
+      const e = findEntry(fid);
+      if (!e) return null;
+      const t = e.types.find(x => x.id === tid);
+      if (!t) return null;
+      return t.items.find(x => x.id === iid) || null;
+    }
+
+    function openItemForm(fid, tid, iid) {
+      const item = iid ? findItem(fid, tid, iid) : null;
+      const isEdit = !!item;
+
+      let lastPrice = null;
+      if (!isEdit) lastPrice = findLastPrice(fid, tid);
+
+      const w = item ? item.weight : '';
+      let p = item ? item.price : (lastPrice !== null ? lastPrice : '');
+      const isManualInit = item ? (item.manualAmount !== null && item.manualAmount !== undefined) : false;
+      let amt = '';
+      if (item) amt = isManualInit ? item.manualAmount : round2(item.weight * item.price);
+      const amtStr = amt === '' ? '' : round2(amt).toFixed(2);
+
+      const entry = findEntry(fid);
+      const typeName = entry ? ((entry.types.find(x => x.id === tid) || {}).name || '') : '';
+
+      openSheet(`
+        <h3 class="sheet-title">${isEdit ? '编辑称' : '新增称'} · ${esc(typeName)}</h3>
+        <div class="row2">
+          <label class="field">
+            <span>重量（斤）</span>
+            <input id="iWeight" class="input" type="number" inputmode="decimal" step="0.01" placeholder="0" value="${w}">
+          </label>
+          <label class="field">
+            <span>单价（元/斤）</span>
+            <input id="iPrice" class="input" type="number" inputmode="decimal" step="0.01" placeholder="0" value="${p}">
+          </label>
+        </div>
+        ${!isEdit && lastPrice !== null ? `<span class="last-price-tip">上次单价 ¥${round2(lastPrice).toFixed(2)}</span>` : ''}
+        <label class="field">
+          <span>金额（元）<em class="auto-tip" id="autoTip">${isManualInit ? '手动修改' : '自动计算'}</em></span>
+          <input id="iAmount" class="input ${isManualInit ? 'manual' : ''}" type="number" inputmode="decimal" step="0.01" placeholder="0.00" value="${amtStr}">
+        </label>
+        <div class="sheet-actions">
+          ${isEdit ? `<button class="btn danger-ghost" data-act="delete-item" data-farmer="${fid}" data-type="${tid}" data-item="${iid}">删除</button>` : ''}
+          <button class="btn ghost" data-act="close-sheet">取消</button>
+          ${isEdit ? '' : `<button class="btn ghost" data-act="save-item-continue" data-farmer="${fid}" data-type="${tid}">再记一称</button>`}
+          <button class="btn primary" data-act="save-item" data-farmer="${fid}" data-type="${tid}" data-item="${iid || ''}">保存</button>
+        </div>
+      `);
+
+      const $w = $('#iWeight'), $p = $('#iPrice'), $a = $('#iAmount'), $tip = $('#autoTip');
+      let isManual = isManualInit;
+
+      function recalc() {
+        if (isManual) return;
+        const wv = parseFloat($w.value) || 0;
+        const pv = parseFloat($p.value) || 0;
+        $a.value = round2(wv * pv).toFixed(2);
+      }
+      $w.addEventListener('input', recalc);
+      $p.addEventListener('input', recalc);
+      $a.addEventListener('input', () => {
+        if ($a.value.trim() === '') {
+          isManual = false;
+          $a.classList.remove('manual');
+          $tip.textContent = '自动计算';
+          recalc();
+        } else {
+          isManual = true;
+          $a.classList.add('manual');
+          $tip.textContent = '手动修改';
+        }
+      });
+      if (!isEdit) recalc();
+    }
+
+    function saveItemData(fid, tid, iid, keepOpen) {
+      const w = parseFloat($('#iWeight').value) || 0;
+      const p = parseFloat($('#iPrice').value) || 0;
+      const aRaw = ($('#iAmount').value || '').trim();
+      const auto = round2(w * p);
+      const a = aRaw === '' ? auto : (parseFloat(aRaw) || 0);
+
+      if (w <= 0 && p <= 0 && a <= 0) { toast('请填写重量和单价'); return; }
+
+      const manualAmount = Math.abs(a - auto) < 0.005 ? null : round2(a);
+
+      const e = findEntry(fid);
+      if (!e) return;
+      const t = e.types.find(x => x.id === tid);
+      if (!t) return;
+
+      if (iid) {
+        const it = t.items.find(x => x.id === iid);
+        if (it) { it.weight = w; it.price = p; it.manualAmount = manualAmount; }
+      } else {
+        t.items.push({ id: uid(), weight: w, price: p, manualAmount });
+      }
+      saveStore();
+      render();
+
+      if (keepOpen) {
+        openItemForm(fid, tid, null);
+        toast('已保存，继续记下一称');
+      } else {
+        closeSheet();
+        toast('已保存');
+      }
+    }
+
+    /* ============================================================
+       农户菜单
+       ============================================================ */
+    function openEntryMenu(id) {
+      const e = findEntry(id);
+      if (!e) return;
+      const isBuy = tab === 'buy';
+      const title = isBuy ? e.name : e.buyer;
+      openSheet(`
+        <h3 class="sheet-title">${esc(title)}</h3>
+        <div class="action-list">
+          ${!isBuy ? `<button class="action-item" data-act="toggle-settle" data-farmer="${id}">${e.settled ? '标记为赊账' : '标记为已结清'}</button>` : ''}
+          <button class="action-item" data-act="edit-final" data-farmer="${id}">修改${isBuy ? '实付' : '实收'}</button>
+          <button class="action-item" data-act="edit-remark" data-farmer="${id}">${e.remark ? '编辑备注' : '添加备注'}</button>
+          <button class="action-item" data-act="rename-entry" data-farmer="${id}">重命名${isBuy ? '农户' : '收购方'}</button>
+          <button class="action-item danger" data-act="delete-entry" data-farmer="${id}">删除</button>
+        </div>
+        <button class="btn ghost" style="width:100%" data-act="close-sheet">取消</button>
+      `);
+    }
+
+    function openRenameForm(id) {
+      const e = findEntry(id);
+      if (!e) return;
+      const isBuy = tab === 'buy';
+      const cur = isBuy ? e.name : e.buyer;
+      openSheet(`
+        <h3 class="sheet-title">重命名${isBuy ? '农户' : '收购方'}</h3>
+        <label class="field">
+          <span>名称</span>
+          <input id="renameInput" class="input" type="text" value="${esc(cur)}">
+        </label>
+        <div class="sheet-actions">
+          <button class="btn ghost" data-act="close-sheet">取消</button>
+          <button class="btn primary" data-act="save-rename" data-farmer="${id}">保存</button>
+        </div>
+      `);
+    }
+
+    /* ============================================================
+       事件委托
+       ============================================================ */
+    document.addEventListener('click', e => {
+      if (e.target.id === 'mask') { closeSheet(); return; }
+
+      const el = e.target.closest('[data-act]');
+
+      /* 隐私模式双击显示 */
+      if (isPrivacy() && !el) {
+        const card = e.target.closest('.farmer-card');
+        if (card) {
+          const cid = card.dataset.cardId;
+          if (cid) {
+            const now = Date.now();
+            if (lastCardTap.id === cid && now - lastCardTap.time < DBL_MS) {
+              revealedEntryId = (revealedEntryId === cid) ? null : cid;
+              lastCardTap = { id: null, time: 0 };
+              render();
+              toast(revealedEntryId ? '已单独显示该户金额' : '已重新隐藏该户金额');
+              return;
+            }
+            lastCardTap = { id: cid, time: now };
+          }
+        }
+      }
+
+      if (!el) return;
+
+      /* 隐私模式未显示拦截 */
+      if (isPrivacy()) {
+        const card = el.closest('.farmer-card');
+        if (card) {
+          const cid = card.dataset.cardId;
+          const actNow = el.dataset.act;
+          const sensitiveActs = ['edit-item', 'add-item', 'add-type', 'edit-final'];
+          if (sensitiveActs.includes(actNow) && revealedEntryId !== cid) {
+            toast('请先双击该户卡片，显示后再操作');
+            return;
+          }
+        }
+      }
+
+      const act = el.dataset.act;
+      const fid = el.dataset.farmer;
+      const tid = el.dataset.type;
+      const iid = el.dataset.item;
+
+      switch (act) {
+        /* 隐私 */
+        case 'toggle-privacy': {
+          const u = U();
+          if (!u) break;
+          u.settings.privacyMode = !u.settings.privacyMode;
+          if (!u.settings.privacyMode) revealedEntryId = null;
+          saveStore();
+          render();
+          toast(u.settings.privacyMode ? '隐私模式已开启' : '隐私模式已关闭');
+          break;
+        }
+
+        /* 更多菜单 */
+        case 'open-more': openMoreMenu(); break;
+
+        /* 登录 */
+        case 'open-login': openLoginSheet(); break;
+        case 'do-login': doLoginAction(); break;
+        case 'sync-now': {
+          if (!store.session) { toast('请先登录'); break; }
+          const u = U();
+          u.lastSync = Date.now();
+          saveStore();
+          toast('已同步到云端（模拟）');
+          openLoginSheet();
+          break;
+        }
+        case 'logout': {
+          confirmSheet('确定退出登录？<br><span style="font-size:12px;color:#B7AC9E">退出后将回到本地数据，云端账号数据已保存</span>', () => {
+            store.session = null;
+            revealedEntryId = null;
+            lastCardTap = { id: null, time: 0 };
+            saveStore();
+            closeSheet();
+            render();
+            toast('已退出登录');
+          });
+          break;
+        }
+
+        /* 日历 */
+        case 'open-calendar': openCalendar(); break;
+        case 'cal-prev':
+        case 'cal-next': {
+          const dir = act === 'cal-prev' ? -1 : 1;
+          const a = parseDate(calAnchor);
+          if (calMode === 'day') {
+            calAnchor = ymd(a.getFullYear(), a.getMonth() + dir, 1);
+          } else if (calMode === 'month') {
+            calAnchor = ymd(a.getFullYear() + dir, 0, 1);
+          } else {
+            calAnchor = ymd(a.getFullYear() + dir * 12, 0, 1);
+          }
+          drawCalendar();
+          break;
+        }
+        case 'cal-mode': {
+          if (calMode === 'day') calMode = 'month';
+          else if (calMode === 'month') calMode = 'year';
+          else calMode = 'day';
+          drawCalendar();
+          break;
+        }
+        case 'cal-pick': {
+          const date = el.dataset.date;
+          if (!date) break;
+          closeSheet();
+          currentDate = date;
+          revealedEntryId = null;
+          lastCardTap = { id: null, time: 0 };
+          render();
+          toast(dateLabel(date));
+          break;
+        }
+        case 'cal-pick-month': {
+          const y = +el.dataset.year, m = +el.dataset.month;
+          calMode = 'day';
+          calAnchor = ymd(y, m - 1, 1);
+          drawCalendar();
+          break;
+        }
+        case 'cal-pick-year': {
+          const y = +el.dataset.year;
+          calMode = 'month';
+          calAnchor = ymd(y, 0, 1);
+          drawCalendar();
+          break;
+        }
+        case 'cal-today': {
+          closeSheet();
+          currentDate = dateStr();
+          revealedEntryId = null;
+          lastCardTap = { id: null, time: 0 };
+          render();
+          toast('已回到今天');
+          break;
+        }
+
+        /* 日期切换 */
+        case 'prev-day':
+          closeSheet(); currentDate = shiftDate(currentDate, -1);
+          revealedEntryId = null; lastCardTap = { id: null, time: 0 };
+          render(); break;
+        case 'next-day':
+          closeSheet(); currentDate = shiftDate(currentDate, 1);
+          revealedEntryId = null; lastCardTap = { id: null, time: 0 };
+          render(); break;
+        case 'back-today':
+          closeSheet(); currentDate = dateStr();
+          revealedEntryId = null; lastCardTap = { id: null, time: 0 };
+          render(); break;
+
+        /* Tab */
+        case 'tab':
+          tab = el.dataset.tab;
+          revealedEntryId = null; lastCardTap = { id: null, time: 0 };
+          closeSheet(); render(); break;
+
+        /* 设置 */
+        case 'open-settings':
+          closeSheet(); renderSettings(); showView('settings'); break;
+        case 'close-settings':
+          showView('app'); render(); break;
+
+        /* 备注 */
+        case 'edit-day-remark':
+          openDayRemarkForm();
+          break;
+        case 'save-day-remark': {
+          const d = getDayData(currentDate);
+          d.remark = ($('#dayRemarkInput').value || '').trim();
+          saveStore(); closeSheet(); render(); toast('备注已保存');
+          break;
+        }
+        case 'delete-day-remark': {
+          const d = getDayData(currentDate);
+          d.remark = '';
+          saveStore(); closeSheet(); render(); toast('备注已清除');
+          break;
+        }
+
+        /* 修改实付 / 实收 */
+        case 'edit-final': openFinalForm(fid); break;
+        case 'final-set': {
+          const v = parseFloat(el.dataset.val) || 0;
+          const inp = $('#finalInput');
+          if (inp) {
+            inp.value = v.toFixed(2);
+            inp.dispatchEvent(new Event('input'));
+          }
+          break;
+        }
+        case 'final-round-up': {
+          const inp = $('#finalInput');
+          if (!inp) break;
+          const v = parseFloat(inp.value) || 0;
+          const next = getNextRoundUp(v);
+          if (next) {
+            inp.value = next.value.toFixed(2);
+            inp.dispatchEvent(new Event('input'));
+          }
+          break;
+        }
+        case 'save-final': {
+          const e = findEntry(fid);
+          if (!e) break;
+          const total = entryTotal(e);
+          const v = parseFloat($('#finalInput').value);
+          if (isNaN(v)) { toast('请输入金额'); break; }
+          if (Math.abs(v - total) < 0.005) {
+            e.finalOverride = null;
+            e.adjust = 0;
+          } else {
+            e.finalOverride = round2(v);
+            e.adjust = 0;
+          }
+          saveStore(); closeSheet(); render(); toast('已保存');
+          break;
+        }
+
+        /* 新增农户 / 收购 */
+        case 'add-entry':
+          openEntryForm(tab);
+          break;
+        case 'save-entry': {
+          const kind = el.dataset.kind;
+          const d = getDayData(currentDate);
+          if (kind === 'buy') {
+            let name = ($('#eName').value || '').trim();
+            if (!name) name = nextFarmerName(d.buys);
+            d.buys.push({
+              id: uid(), name, remark: '',
+              adjust: 0, finalOverride: null,
+              createdAt: Date.now(),
+              types: []
+            });
+            saveStore(); closeSheet(); render(); toast('已添加 ' + name);
+          } else {
+            let buyer = $('#eBuyer').value;
+            if (buyer === '__new__') {
+              buyer = ($('#newBuyerName').value || '').trim();
+              if (!buyer) { toast('请输入收购方名称'); return; }
+              if (!U().settings.buyers.includes(buyer)) U().settings.buyers.push(buyer);
+            }
+            if (!buyer) { toast('请选择收购方'); return; }
+            d.sells.push({
+              id: uid(), buyer, remark: '', settled: false,
+              adjust: 0, finalOverride: null,
+              createdAt: Date.now(),
+              types: []
+            });
+            saveStore(); closeSheet(); render(); toast('已添加 ' + buyer);
+          }
+          break;
+        }
+
+        /* 农户菜单 */
+        case 'entry-menu': openEntryMenu(fid); break;
+        case 'toggle-settle': {
+          const en = findEntry(fid);
+          if (!en) break;
+          en.settled = !en.settled;
+          saveStore(); closeSheet(); render();
+          toast(en.settled ? '已标记为结清' : '已标记为赊账');
+          break;
+        }
+        case 'rename-entry': openRenameForm(fid); break;
+        case 'save-rename': {
+          const name = ($('#renameInput').value || '').trim();
+          if (!name) { toast('请输入名称'); break; }
+          const en = findEntry(fid);
+          if (en) {
+            if (tab === 'buy') en.name = name;
+            else en.buyer = name;
+          }
+          saveStore(); closeSheet(); render(); toast('已修改');
+          break;
+        }
+        case 'delete-entry': {
+          const en = findEntry(fid);
+          if (!en) break;
+          const isBuy = tab === 'buy';
+          const label = isBuy ? en.name : en.buyer;
+          confirmSheet(`确定删除「${esc(label)}」及其全部记录？`, () => {
+            const d = getDayData(currentDate);
+            if (isBuy) d.buys = d.buys.filter(x => x.id !== fid);
+            else d.sells = d.sells.filter(x => x.id !== fid);
+            if (revealedEntryId === fid) revealedEntryId = null;
+            saveStore(); closeSheet(); render(); toast('已删除');
+          });
+          break;
+        }
+
+        /* 单据备注 */
+        case 'edit-remark': {
+          const en = findEntry(fid);
+          if (!en) break;
+          openSheet(`
+            <h3 class="sheet-title">${en.remark ? '编辑' : '添加'}备注</h3>
+            <label class="field">
+              <span>备注</span>
+              <input id="remarkInput" class="input" type="text" value="${esc(en.remark || '')}" placeholder="输入备注">
+            </label>
+            <div class="sheet-actions">
+              ${en.remark ? `<button class="btn danger-ghost" data-act="delete-remark" data-farmer="${fid}">清除</button>` : ''}
+              <button class="btn ghost" data-act="close-sheet">取消</button>
+              <button class="btn primary" data-act="save-remark" data-farmer="${fid}">保存</button>
+            </div>
+          `);
+          setTimeout(() => { const el = $('#remarkInput'); if (el) { el.focus(); el.select(); } }, 200);
+          break;
+        }
+        case 'save-remark': {
+          const en = findEntry(fid);
+          if (!en) break;
+          en.remark = ($('#remarkInput').value || '').trim();
+          saveStore(); closeSheet(); render(); toast('备注已保存');
+          break;
+        }
+        case 'delete-remark': {
+          const en = findEntry(fid);
+          if (!en) break;
+          en.remark = '';
+          saveStore(); closeSheet(); render(); toast('备注已清除');
+          break;
+        }
+
+        /* 类型 */
+        case 'add-type': openTypeForm(fid); break;
+        case 'pick-type': {
+          const name = el.dataset.name;
+          const en = findEntry(fid);
+          if (!en) break;
+          let t = en.types.find(x => x.name === name);
+          if (!t) { t = { id: uid(), name, items: [] }; en.types.push(t); }
+          saveStore(); render(); openItemForm(fid, t.id, null);
+          break;
+        }
+        case 'save-type': {
+          const name = ($('#tName').value || '').trim();
+          if (!name) { toast('请输入类型名称'); break; }
+          const en = findEntry(fid);
+          if (!en) break;
+          let t = en.types.find(x => x.name === name);
+          if (!t) { t = { id: uid(), name, items: [] }; en.types.push(t); }
+          const presetKey = tab === 'buy' ? 'buyTypes' : 'sellTypes';
+          const presets = U().settings[presetKey];
+          if (!presets.includes(name)) presets.push(name);
+          saveStore(); render(); openItemForm(fid, t.id, null);
+          break;
+        }
+
+        /* 称 */
+        case 'add-item': openItemForm(fid, tid, null); break;
+        case 'edit-item': openItemForm(fid, tid, iid); break;
+        case 'save-item': saveItemData(fid, tid, iid, false); break;
+        case 'save-item-continue': saveItemData(fid, tid, '', true); break;
+        case 'delete-item': {
+          const en = findEntry(fid);
+          if (!en) break;
+          const t = en.types.find(x => x.id === tid);
+          if (!t) break;
+          t.items = t.items.filter(x => x.id !== iid);
+          saveStore(); closeSheet(); render(); toast('已删除');
+          break;
+        }
+
+        /* 设置项 */
+        case 'add-setting': {
+          const kind = el.dataset.kind;
+          const inp = $('#add_' + kind);
+          const name = inp ? inp.value.trim() : '';
+          if (!name) { toast('请输入名称'); break; }
+          const list = U().settings[kind];
+          if (!Array.isArray(list)) return;
+          if (list.includes(name)) { toast('已存在'); break; }
+          list.push(name);
+          saveStore();
+          renderSettings();
+          toast('已添加');
+          break;
+        }
+        case 'del-setting': {
+          const kind = el.dataset.kind;
+          const name = el.dataset.name;
+          const list = U().settings[kind];
+          if (!Array.isArray(list)) return;
+          const idx = list.indexOf(name);
+          if (idx >= 0) list.splice(idx, 1);
+          saveStore();
+          renderSettings();
+          toast('已删除');
+          break;
+        }
+        case 'clear-all': {
+          confirmSheet('确定清空所有记账数据？<br><span style="font-size:12px;color:#B7AC9E">类型和收购方设置会保留</span>', () => {
+            U().days = {};
+            revealedEntryId = null;
+            saveStore();
+            renderSettings();
+            toast('已清空');
+          });
+          break;
+        }
+
+        /* 通用 */
+        case 'close-sheet': closeSheet(); break;
+        case 'confirm-ok': {
+          const cb = pendingConfirm;
+          pendingConfirm = null;
+          closeSheet();
+          if (cb) cb();
+          break;
+        }
+      }
+    });
+
+    /* ============================================================
+       初始化 / 迁移 / 种子
+       ============================================================ */
+    function migrateV2ToGuest() {
+      const g = store.guest;
+      if (g.days && Object.keys(g.days).length > 0) return false;
+      try {
+        const old = JSON.parse(localStorage.getItem(V2_KEY) || 'null');
+        if (!old || typeof old !== 'object') return false;
+        let ok = false;
+        Object.keys(old).forEach(d => {
+          const day = old[d];
+          if (!day || typeof day !== 'object' || Array.isArray(day)) return;
+          const mapItem = it => ({
+            id: it.id || uid(),
+            weight: it.weight || 0,
+            price: it.price || 0,
+            manualAmount: (it.manualAmount === undefined || it.manualAmount === null) ? null : it.manualAmount
+          });
+          const mapType = t => ({
+            id: t.id || uid(),
+            name: t.name || '未命名',
+            items: (t.items || []).map(mapItem)
+          });
+          const baseTs = parseDate(d).getTime();
+          const buys = (day.buys || []).map((e, i) => ({
+            id: e.id || uid(),
+            name: e.name || '未命名',
+            remark: '',
+            adjust: e.adjust || 0,
+            finalOverride: null,
+            createdAt: baseTs + (8 * 60 + i * 10) * 60000,
+            types: (e.types || []).map(mapType)
+          }));
+          const sells = (day.sells || []).map((e, i) => ({
+            id: e.id || uid(),
+            buyer: e.name || e.buyer || '未命名',
+            settled: false,
+            remark: '',
+            adjust: e.adjust || 0,
+            finalOverride: null,
+            createdAt: baseTs + (14 * 60 + i * 10) * 60000,
+            types: (e.types || []).map(mapType)
+          }));
+          if (buys.length || sells.length) ok = true;
+          g.days[d] = { buys, sells, remark: '' };
+        });
+        return ok;
+      } catch (e) { return false; }
+    }
+
+    function tsOf(dateString, h, m) {
+      const dd = parseDate(dateString);
+      return new Date(dd.getFullYear(), dd.getMonth(), dd.getDate(), h, m).getTime();
+    }
+
+    function seedUser(user) {
+      const d = dateStr();
+      user.days[d] = {
+        remark: '上午下雨，只收半天',
+        buys: [
+          {
+            id: uid(), name: '户1', remark: '本村老客户',
+            adjust: 0, finalOverride: null, createdAt: tsOf(d, 8, 25), types: [
+              { id: uid(), name: '花生果', items: [{ id: uid(), weight: 520, price: 3.6, manualAmount: null }] }
+            ]
+          },
+          {
+            id: uid(), name: '户2', remark: '',
+            adjust: -0.3, finalOverride: null, createdAt: tsOf(d, 9, 40), types: [
+              { id: uid(), name: '花生米', items: [
+                { id: uid(), weight: 300, price: 4.9, manualAmount: null },
+                { id: uid(), weight: 120, price: 5.1, manualAmount: null }
+              ] }
+            ]
+          }
+        ],
+        sells: [
+          {
+            id: uid(), buyer: '鲁南油厂', remark: '现金结算', settled: true,
+            adjust: 0, finalOverride: null, createdAt: tsOf(d, 14, 20), types: [
+              { id: uid(), name: '商品米', items: [{ id: uid(), weight: 280, price: 6.2, manualAmount: null }] },
+              { id: uid(), name: '下料米', items: [{ id: uid(), weight: 35, price: 3.8, manualAmount: null }] }
+            ]
+          },
+          {
+            id: uid(), buyer: '鲁南油厂', remark: '', settled: false,
+            adjust: 0, finalOverride: null, createdAt: tsOf(d, 16, 5), types: [
+              { id: uid(), name: '商品米', items: [{ id: uid(), weight: 120, price: 6.3, manualAmount: null }] }
+            ]
+          }
+        ]
+      };
+      const y = shiftDate(d, -1);
+      user.days[y] = {
+        remark: '',
+        buys: [
+          {
+            id: uid(), name: '户1', remark: '',
+            adjust: 0, finalOverride: null, createdAt: tsOf(y, 9, 10), types: [
+              { id: uid(), name: '花生果', items: [{ id: uid(), weight: 400, price: 3.5, manualAmount: null }] }
+            ]
+          }
+        ],
+        sells: [
+          {
+            id: uid(), buyer: '鲁南油厂', remark: '', settled: true,
+            adjust: 0, finalOverride: null, createdAt: tsOf(y, 15, 30), types: [
+              { id: uid(), name: '商品米', items: [{ id: uid(), weight: 260, price: 6.1, manualAmount: null }] }
+            ]
+          }
+        ]
+      };
+      const y2 = shiftDate(d, -32);
+      user.days[y2] = {
+        remark: '',
+        buys: [
+          {
+            id: uid(), name: '户3', remark: '',
+            adjust: 0, finalOverride: null, createdAt: tsOf(y2, 10, 15), types: [
+              { id: uid(), name: '油料米', items: [{ id: uid(), weight: 600, price: 4.1, manualAmount: null }] }
+            ]
+          }
+        ],
+        sells: []
+      };
+      const y3 = shiftDate(d, -3);
+      user.days[y3] = {
+        remark: '',
+        buys: [],
+        sells: [
+          {
+            id: uid(), buyer: '鲁南油厂', remark: '', settled: false,
+            adjust: 0, finalOverride: null, createdAt: tsOf(y3, 11, 0), types: [
+              { id: uid(), name: '商品米', items: [{ id: uid(), weight: 300, price: 6.3, manualAmount: null }] }
+            ]
+          }
+        ]
+      };
+    }
+
+    if (!store.migrated) {
+      migrateV2ToGuest();
+      if (!store.guest.days || Object.keys(store.guest.days).length === 0) {
+        seedUser(store.guest);
+      }
+      store.migrated = true;
+      saveStore();
+    }
+
+    if (!store.session || !store.users[store.session]) {
+      store.session = null;
+    }
+
+    /* ============================================================
+       跨天自动切换
+       ============================================================ */
+    function checkDayChange() {
+      if (view !== 'app') return;
+      const now = dateStr();
+      if (now === lastToday) return;
+      const wasToday = currentDate === lastToday;
+      lastToday = now;
+      if (wasToday) {
+        currentDate = now;
+        revealedEntryId = null;
+        lastCardTap = { id: null, time: 0 };
+        closeSheet();
+      }
+      render();
+    }
+    setInterval(checkDayChange, 20000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) checkDayChange(); });
+
+    /* ============================================================
+       启动
+       ============================================================ */
+    showView('app');
+    render();
+</script>
+</body>
+</html>
